@@ -1,0 +1,244 @@
+use anchor_lang::prelude::*;
+use arcium_anchor::prelude::*;
+use arcium_client::idl::arcium::types::CallbackAccount;
+
+use crate::constants::*;
+use crate::errors::ErrorCode;
+use crate::state::*;
+use crate::{ID, ID_CONST, ArciumSignerAccount};
+
+// Computation definition offset for withdraw_fee
+const COMP_DEF_OFFSET_WITHDRAW_FEE: u32 = comp_def_offset("withdraw_fee");
+
+/// Build the ArgBuilder for withdraw_fee MPC computation
+/// Input 1: Encrypted miner_id_hash (4 ciphertexts for [u64; 4])
+/// Input 2: Encrypted amount (1 ciphertext for Enc<Shared, u64>)
+/// Input 3: Encrypted destination (4 ciphertexts for [u64; 4])
+/// Input 4: Encrypted signature (8 ciphertexts for [u64; 8])
+#[inline(never)]
+fn build_withdraw_fee_args(
+    client_pubkey: [u8; 32],
+    encryption_nonce: u128,
+    encrypted_miner_id_hash: [[u8; 32]; 4],
+    encrypted_amount: [u8; 32],
+    encrypted_destination: [[u8; 32]; 4],
+    encrypted_signature: [[u8; 32]; 8],
+) -> ArgumentList {
+    ArgBuilder::new()
+        // Input 1: encrypted miner_id_hash (4 x u64)
+        .x25519_pubkey(client_pubkey)
+        .plaintext_u128(encryption_nonce)
+        .encrypted_u64(encrypted_miner_id_hash[0])
+        .encrypted_u64(encrypted_miner_id_hash[1])
+        .encrypted_u64(encrypted_miner_id_hash[2])
+        .encrypted_u64(encrypted_miner_id_hash[3])
+        // Input 2: encrypted amount (1 x u64)
+        .x25519_pubkey(client_pubkey)
+        .plaintext_u128(encryption_nonce)
+        .encrypted_u64(encrypted_amount)
+        // Input 3: encrypted destination (4 x u64)
+        .x25519_pubkey(client_pubkey)
+        .plaintext_u128(encryption_nonce)
+        .encrypted_u64(encrypted_destination[0])
+        .encrypted_u64(encrypted_destination[1])
+        .encrypted_u64(encrypted_destination[2])
+        .encrypted_u64(encrypted_destination[3])
+        // Input 4: encrypted signature (8 x u64)
+        .x25519_pubkey(client_pubkey)
+        .plaintext_u128(encryption_nonce)
+        .encrypted_u64(encrypted_signature[0])
+        .encrypted_u64(encrypted_signature[1])
+        .encrypted_u64(encrypted_signature[2])
+        .encrypted_u64(encrypted_signature[3])
+        .encrypted_u64(encrypted_signature[4])
+        .encrypted_u64(encrypted_signature[5])
+        .encrypted_u64(encrypted_signature[6])
+        .encrypted_u64(encrypted_signature[7])
+        .build()
+}
+
+/// Execute withdrawal with MPC balance verification
+/// This is step 2 of the withdrawal process
+///
+/// Flow:
+/// 1. Verify withdraw buffer exists and is unused
+/// 2. Queue Arcium MPC computation to verify balance and deduct amount
+/// 3. MPC callback will transfer SOL if verification passes
+pub fn handler(ctx: Context<WithdrawPrivate>, computation_offset: u64) -> Result<()> {
+    let config = &ctx.accounts.privacy_config;
+    let buffer = &ctx.accounts.withdraw_buffer;
+    let clock = Clock::get()?;
+
+    // Verify protocol is active
+    require!(config.is_active, ErrorCode::ProtocolInactive);
+
+    // Verify buffer is not already used
+    require!(!buffer.is_used, ErrorCode::BufferAlreadyUsed);
+
+    // Build MPC arguments from the withdraw buffer
+    let args = build_withdraw_fee_args(
+        buffer.client_pubkey,
+        buffer.encryption_nonce,
+        buffer.encrypted_miner_id_hash,
+        buffer.encrypted_amount,
+        buffer.encrypted_destination,
+        buffer.encrypted_signature,
+    );
+
+    // Set sign PDA bump
+    ctx.accounts.sign_pda_account.bump = ctx.bumps.sign_pda_account;
+
+    // Import the callback from lib.rs
+    use crate::pow_privacy::WithdrawFeeCallback;
+
+    // Custom accounts must match WithdrawFeeCallback struct order exactly:
+    // 1. privacy_config (mut)
+    // 2. withdraw_buffer (mut)
+    // 3. shared_fee_vault (mut)
+    // 4. destination (mut)
+    // 5. system_program
+    queue_computation(
+        ctx.accounts,
+        computation_offset,
+        args,
+        None,
+        vec![WithdrawFeeCallback::callback_ix(
+            computation_offset,
+            &ctx.accounts.mxe_account,
+            &[
+                CallbackAccount {
+                    pubkey: ctx.accounts.privacy_config.key(),
+                    is_writable: true,
+                },
+                CallbackAccount {
+                    pubkey: ctx.accounts.withdraw_buffer.key(),
+                    is_writable: true,
+                },
+                CallbackAccount {
+                    pubkey: ctx.accounts.shared_fee_vault.key(),
+                    is_writable: true,
+                },
+                CallbackAccount {
+                    pubkey: ctx.accounts.destination.key(),
+                    is_writable: true,
+                },
+                CallbackAccount {
+                    pubkey: ctx.accounts.system_program.key(),
+                    is_writable: false,
+                },
+            ],
+        )?],
+        1,  // num_callback_txs
+        0,  // cu_price_micro
+    )?;
+
+    emit!(MpcComputationQueued {
+        computation_type: "withdraw_fee".to_string(),
+        timestamp: clock.unix_timestamp,
+    });
+
+    Ok(())
+}
+
+#[queue_computation_accounts("withdraw_fee", caller)]
+#[derive(Accounts)]
+#[instruction(computation_offset: u64)]
+pub struct WithdrawPrivate<'info> {
+    /// Anyone can trigger the withdrawal (relayer or the miner themself)
+    #[account(mut)]
+    pub caller: Signer<'info>,
+
+    /// Privacy protocol configuration
+    #[account(
+        mut,
+        seeds = [PRIVACY_CONFIG_SEED],
+        bump = privacy_config.bump,
+    )]
+    pub privacy_config: Box<Account<'info, PrivacyConfig>>,
+
+    /// Withdraw buffer with encrypted data
+    #[account(
+        mut,
+        constraint = !withdraw_buffer.is_used @ ErrorCode::BufferAlreadyUsed,
+    )]
+    pub withdraw_buffer: Box<Account<'info, WithdrawBuffer>>,
+
+    /// Shared fee vault (SOL source for withdrawal)
+    /// CHECK: PDA verified by seeds
+    #[account(
+        mut,
+        seeds = [SHARED_FEE_VAULT_SEED, privacy_config.key().as_ref()],
+        bump = privacy_config.fee_vault_bump,
+    )]
+    pub shared_fee_vault: UncheckedAccount<'info>,
+
+    /// Destination for the withdrawal (provided in encrypted form, verified by MPC)
+    /// CHECK: Verified by MPC output in callback
+    #[account(mut)]
+    pub destination: UncheckedAccount<'info>,
+
+    pub system_program: Program<'info, System>,
+
+    // === Arcium MPC accounts ===
+
+    /// Arcium sign PDA account
+    #[account(
+        init_if_needed,
+        space = 9,
+        payer = caller,
+        seeds = [&SIGN_PDA_SEED],
+        bump,
+        address = derive_sign_pda!(),
+    )]
+    pub sign_pda_account: Box<Account<'info, ArciumSignerAccount>>,
+
+    /// MXE Account
+    #[account(address = derive_mxe_pda!())]
+    pub mxe_account: Box<Account<'info, MXEAccount>>,
+
+    /// Mempool account
+    #[account(
+        mut,
+        address = derive_mempool_pda!(mxe_account, ErrorCode::ClusterNotSet)
+    )]
+    /// CHECK: mempool_account, checked by the arcium program
+    pub mempool_account: UncheckedAccount<'info>,
+
+    /// Executing pool
+    #[account(
+        mut,
+        address = derive_execpool_pda!(mxe_account, ErrorCode::ClusterNotSet)
+    )]
+    /// CHECK: executing_pool, checked by the arcium program
+    pub executing_pool: UncheckedAccount<'info>,
+
+    /// Computation account
+    #[account(
+        mut,
+        address = derive_comp_pda!(computation_offset, mxe_account, ErrorCode::ClusterNotSet)
+    )]
+    /// CHECK: computation_account, checked by the arcium program
+    pub computation_account: UncheckedAccount<'info>,
+
+    /// Computation definition account for withdraw_fee
+    #[account(address = derive_comp_def_pda!(COMP_DEF_OFFSET_WITHDRAW_FEE))]
+    pub comp_def_account: Box<Account<'info, ComputationDefinitionAccount>>,
+
+    /// Cluster account
+    #[account(
+        mut,
+        address = derive_cluster_pda!(mxe_account, ErrorCode::ClusterNotSet)
+    )]
+    pub cluster_account: Box<Account<'info, Cluster>>,
+
+    /// Arcium fee pool account
+    #[account(mut, address = ARCIUM_FEE_POOL_ACCOUNT_ADDRESS)]
+    pub pool_account: Box<Account<'info, FeePool>>,
+
+    /// Arcium clock account
+    #[account(mut, address = ARCIUM_CLOCK_ACCOUNT_ADDRESS)]
+    pub clock_account: Box<Account<'info, ClockAccount>>,
+
+    /// Arcium program
+    pub arcium_program: Program<'info, Arcium>,
+}

@@ -1,0 +1,33 @@
+[package]
+name = "pow-protocol"
+version = "0.1.0"
+description = "Proof of Work Protocol for Solana - A modern PoW system with auto-adjusting difficulty, progressive fees, and SPL2022 integration"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/yourname/pow-solana"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "pow_protocol"
+
+[features]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+default = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+# Anchor internal features - needed to suppress cfg warnings
+custom-heap = []
+custom-panic = []
+anchor-debug = []
+
+[dependencies]
+anchor-lang = { version = "0.32.1", features = ["init-if-needed"] }
+anchor-spl = "0.32.1"
+solana-program = "2.0"
+
+[dev-dependencies]
+# Pour les tests
+sha3 = "0.10"
+hex = "0.4"
