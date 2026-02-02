@@ -13,7 +13,7 @@ use instructions::*;
 use state::PrivacyConfigArgs;
 pub use errors::ErrorCode;
 
-declare_id!("EnchaSHvRoShUp6zrF2awSeQGVYjGFZfjpkdoi2nKPBk");
+declare_id!("ENCH3LVUcMHpei1ByFLGwS4cGd3FEVtER1D4ZXov4qhW");
 
 /// Helper function to convert [u64; 4] to [u8; 32]
 pub fn u64_array_to_bytes(arr: &[u64; 4]) -> [u8; 32] {
@@ -538,6 +538,14 @@ pub mod pow_privacy {
         #[account(mut)]
         pub comp_def_account: UncheckedAccount<'info>,
 
+        /// CHECK: address_lookup_table, checked by arcium program.
+        #[account(mut, address = derive_mxe_lut_pda!(mxe_account.lut_offset_slot))]
+        pub address_lookup_table: UncheckedAccount<'info>,
+
+        /// CHECK: lut_program is the Address Lookup Table program.
+        #[account(address = LUT_PROGRAM_ID)]
+        pub lut_program: UncheckedAccount<'info>,
+
         pub arcium_program: Program<'info, Arcium>,
         pub system_program: Program<'info, System>,
     }
@@ -558,6 +566,14 @@ pub mod pow_privacy {
         /// CHECK: Initialized by Arcium program
         #[account(mut)]
         pub comp_def_account: UncheckedAccount<'info>,
+
+        /// CHECK: address_lookup_table, checked by arcium program.
+        #[account(mut, address = derive_mxe_lut_pda!(mxe_account.lut_offset_slot))]
+        pub address_lookup_table: UncheckedAccount<'info>,
+
+        /// CHECK: lut_program is the Address Lookup Table program.
+        #[account(address = LUT_PROGRAM_ID)]
+        pub lut_program: UncheckedAccount<'info>,
 
         pub arcium_program: Program<'info, Arcium>,
         pub system_program: Program<'info, System>,
@@ -580,6 +596,14 @@ pub mod pow_privacy {
         #[account(mut)]
         pub comp_def_account: UncheckedAccount<'info>,
 
+        /// CHECK: address_lookup_table, checked by arcium program.
+        #[account(mut, address = derive_mxe_lut_pda!(mxe_account.lut_offset_slot))]
+        pub address_lookup_table: UncheckedAccount<'info>,
+
+        /// CHECK: lut_program is the Address Lookup Table program.
+        #[account(address = LUT_PROGRAM_ID)]
+        pub lut_program: UncheckedAccount<'info>,
+
         pub arcium_program: Program<'info, Arcium>,
         pub system_program: Program<'info, System>,
     }
@@ -600,6 +624,14 @@ pub mod pow_privacy {
         /// CHECK: Initialized by Arcium program
         #[account(mut)]
         pub comp_def_account: UncheckedAccount<'info>,
+
+        /// CHECK: address_lookup_table, checked by arcium program.
+        #[account(mut, address = derive_mxe_lut_pda!(mxe_account.lut_offset_slot))]
+        pub address_lookup_table: UncheckedAccount<'info>,
+
+        /// CHECK: lut_program is the Address Lookup Table program.
+        #[account(address = LUT_PROGRAM_ID)]
+        pub lut_program: UncheckedAccount<'info>,
 
         pub arcium_program: Program<'info, Arcium>,
         pub system_program: Program<'info, System>,
@@ -622,6 +654,14 @@ pub mod pow_privacy {
         #[account(mut)]
         pub comp_def_account: UncheckedAccount<'info>,
 
+        /// CHECK: address_lookup_table, checked by arcium program.
+        #[account(mut, address = derive_mxe_lut_pda!(mxe_account.lut_offset_slot))]
+        pub address_lookup_table: UncheckedAccount<'info>,
+
+        /// CHECK: lut_program is the Address Lookup Table program.
+        #[account(address = LUT_PROGRAM_ID)]
+        pub lut_program: UncheckedAccount<'info>,
+
         pub arcium_program: Program<'info, Arcium>,
         pub system_program: Program<'info, System>,
     }
@@ -642,6 +682,14 @@ pub mod pow_privacy {
         /// CHECK: Initialized by Arcium program
         #[account(mut)]
         pub comp_def_account: UncheckedAccount<'info>,
+
+        /// CHECK: address_lookup_table, checked by arcium program.
+        #[account(mut, address = derive_mxe_lut_pda!(mxe_account.lut_offset_slot))]
+        pub address_lookup_table: UncheckedAccount<'info>,
+
+        /// CHECK: lut_program is the Address Lookup Table program.
+        #[account(address = LUT_PROGRAM_ID)]
+        pub lut_program: UncheckedAccount<'info>,
 
         pub arcium_program: Program<'info, Arcium>,
         pub system_program: Program<'info, System>,

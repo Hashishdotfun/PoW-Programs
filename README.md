@@ -7,7 +7,7 @@ A suite of Solana programs implementing Proof-of-Work mining with privacy-preser
 | | Address |
 |---|---|
 | **Program** | `PoWgG9zPrzF2vFUQRTyU4L1aNMZmbsemxJgwhycjtS4` |
-| **Program Encrypted** | `EnchaSHvRoShUp6zrF2awSeQGVYjGFZfjpkdoi2nKPBk` |
+| **Program Encrypted** | `ENCH3LVUcMHpei1ByFLGwS4cGd3FEVtER1D4ZXov4qhW` |
 | **Token Mint** | `HaShish4TSSxVg5gvEHLAttzifzapwPzmcH1MFtWjwC8` |
 
 ## Programs

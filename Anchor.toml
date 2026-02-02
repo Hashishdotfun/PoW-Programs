@@ -8,7 +8,7 @@ skip-lint = false
 [programs.devnet]
 pow_protocol = "PoWgG9zPrzF2vFUQRTyU4L1aNMZmbsemxJgwhycjtS4"
 pow_pool = "4DHpKjPiay8FiimQ4UFWnZY6tQVYwPXwiqu6445wwZif"
-pow_privacy = "EnchaSHvRoShUp6zrF2awSeQGVYjGFZfjpkdoi2nKPBk"
+pow_privacy = "ENCH3LVUcMHpei1ByFLGwS4cGd3FEVtER1D4ZXov4qhW"
 
 [programs.localnet]
 pow_pool = "Poo1111111111111111111111111111111111111111"

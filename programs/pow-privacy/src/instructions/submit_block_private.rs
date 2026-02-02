@@ -303,7 +303,6 @@ pub struct SubmitBlockPrivate<'info> {
         mut,
         seeds = [PRIVACY_CONFIG_SEED],
         bump = privacy_config.bump,
-        constraint = privacy_config.relayer == relayer.key() @ ErrorCode::Unauthorized,
     )]
     pub privacy_config: Box<Account<'info, PrivacyConfig>>,
 
