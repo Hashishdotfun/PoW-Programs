@@ -101,7 +101,6 @@ pub fn handler(ctx: Context<WithdrawPrivate>, computation_offset: u64) -> Result
         ctx.accounts,
         computation_offset,
         args,
-        None,
         vec![WithdrawFeeCallback::callback_ix(
             computation_offset,
             &ctx.accounts.mxe_account,

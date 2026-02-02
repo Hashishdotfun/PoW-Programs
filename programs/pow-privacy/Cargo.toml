@@ -28,9 +28,9 @@ pow-protocol = { path = "../pow-protocol", features = ["cpi"] }
 solana-program = "2.0"
 
 # Arcium SDK for confidential computing
-arcium-anchor = "0.6.3"
-arcium-macros = "0.6.3"
-arcium-client = { version = "0.6.3", default-features = false }
+arcium-anchor = "0.7.0"
+arcium-macros = "0.7.0"
+arcium-client = { version = "0.7.0", default-features = false }
 
 [lints.rust]
 unexpected_cfgs = { level = "allow", check-cfg = ['cfg(target_os, values("solana"))'] }

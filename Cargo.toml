@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "programs/*",
-    "miner",
     "encrypted-ixs"
 ]
 resolver = "2"

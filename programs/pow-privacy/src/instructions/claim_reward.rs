@@ -118,7 +118,6 @@ pub fn handler(
         ctx.accounts,
         computation_offset,
         args,
-        None,
         vec![VerifyAndClaimCallback::callback_ix(
             computation_offset,
             &ctx.accounts.mxe_account,
