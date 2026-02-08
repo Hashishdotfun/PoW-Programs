@@ -12,40 +12,28 @@ use crate::{ID, ID_CONST, ArciumSignerAccount};
 const COMP_DEF_OFFSET_DEPOSIT_FEE: u32 = comp_def_offset("deposit_fee");
 
 /// Build the ArgBuilder for deposit_fee MPC computation
-/// Input 1: Encrypted miner_id_hash (4 ciphertexts for [u64; 4])
-/// Input 2: Encrypted amount (1 ciphertext for Enc<Shared, u64>)
-/// Input 3: Encrypted signature (8 ciphertexts for [u64; 8])
+/// Circuit signature: deposit_fee(amount, current_state) -> (MinerState, DepositFeeResult)
+/// Input 1: Encrypted amount (1 ciphertext for Enc<Shared, u64>)
+/// Input 2: Encrypted current_state (3 ciphertexts for MinerState: balance, nonce, reserved)
+/// Note: current_state is Arcium persistent state - initialized to zeros for new miners
 #[inline(never)]
 fn build_deposit_fee_args(
     client_pubkey: [u8; 32],
     encryption_nonce: u128,
-    encrypted_miner_id_hash: [[u8; 32]; 4],
     encrypted_amount: [u8; 32],
-    encrypted_signature: [[u8; 32]; 8],
+    encrypted_current_state: [[u8; 32]; 3],
 ) -> ArgumentList {
     ArgBuilder::new()
-        // Input 1: encrypted miner_id_hash (4 x u64)
-        .x25519_pubkey(client_pubkey)
-        .plaintext_u128(encryption_nonce)
-        .encrypted_u64(encrypted_miner_id_hash[0])
-        .encrypted_u64(encrypted_miner_id_hash[1])
-        .encrypted_u64(encrypted_miner_id_hash[2])
-        .encrypted_u64(encrypted_miner_id_hash[3])
-        // Input 2: encrypted amount (1 x u64)
+        // Input 1: encrypted amount (1 x u64)
         .x25519_pubkey(client_pubkey)
         .plaintext_u128(encryption_nonce)
         .encrypted_u64(encrypted_amount)
-        // Input 3: encrypted signature (8 x u64)
+        // Input 2: encrypted current_state (3 x u64: balance, nonce, reserved)
         .x25519_pubkey(client_pubkey)
         .plaintext_u128(encryption_nonce)
-        .encrypted_u64(encrypted_signature[0])
-        .encrypted_u64(encrypted_signature[1])
-        .encrypted_u64(encrypted_signature[2])
-        .encrypted_u64(encrypted_signature[3])
-        .encrypted_u64(encrypted_signature[4])
-        .encrypted_u64(encrypted_signature[5])
-        .encrypted_u64(encrypted_signature[6])
-        .encrypted_u64(encrypted_signature[7])
+        .encrypted_u64(encrypted_current_state[0])
+        .encrypted_u64(encrypted_current_state[1])
+        .encrypted_u64(encrypted_current_state[2])
         .build()
 }
 
@@ -86,9 +74,8 @@ pub fn handler(ctx: Context<DepositPrivate>, computation_offset: u64) -> Result<
     let args = build_deposit_fee_args(
         buffer.client_pubkey,
         buffer.encryption_nonce,
-        buffer.encrypted_miner_id_hash,
         buffer.encrypted_amount,
-        buffer.encrypted_signature,
+        buffer.encrypted_current_state,
     );
 
     // Set sign PDA bump

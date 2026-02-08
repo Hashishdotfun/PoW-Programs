@@ -18,7 +18,7 @@ pub mod instructions;
 
 use instructions::*;
 
-declare_id!("PoWgG9zPrzF2vFUQRTyU4L1aNMZmbsemxJgwhycjtS4");
+declare_id!("6DEmqXKEokfBz2wiREVthwbkDECvrWorkJNd48duatL2");
 
 #[program]
 pub mod pow_protocol {

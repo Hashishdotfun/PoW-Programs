@@ -90,4 +90,7 @@ pub enum ErrorCode {
 
     #[msg("Insufficient balance in MPC state")]
     InsufficientBalance,
+
+    #[msg("Insufficient encrypted balance for mining fee")]
+    InsufficientEncryptedBalance,
 }

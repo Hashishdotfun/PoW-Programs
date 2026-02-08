@@ -4,20 +4,19 @@ use crate::constants::*;
 use crate::errors::ErrorCode;
 use crate::state::*;
 
-/// Create a withdrawal buffer with encrypted miner identification and destination
+/// Create a withdrawal buffer with encrypted amount, destination and current state
 /// This is step 1 of the withdrawal process
 ///
 /// Flow:
-/// 1. Miner creates WithdrawBuffer with encrypted miner_id_hash and destination
+/// 1. Miner creates WithdrawBuffer with encrypted data
 /// 2. Miner calls withdraw_private to trigger MPC verification
 /// 3. MPC verifies balance, deducts amount, and returns destination
 /// 4. Callback transfers SOL to the verified destination
 pub fn handler(
     ctx: Context<CreateWithdrawBuffer>,
-    encrypted_miner_id_hash: [[u8; 32]; 4],
     encrypted_amount: [u8; 32],
     encrypted_destination: [[u8; 32]; 4],
-    encrypted_signature: [[u8; 32]; 8],
+    encrypted_current_state: [[u8; 32]; 3],
     client_pubkey: [u8; 32],
     encryption_nonce: u128,
     amount: u64,
@@ -35,10 +34,9 @@ pub fn handler(
 
     buffer.owner = ctx.accounts.creator.key();
     buffer.amount = amount;
-    buffer.encrypted_miner_id_hash = encrypted_miner_id_hash;
     buffer.encrypted_amount = encrypted_amount;
     buffer.encrypted_destination = encrypted_destination;
-    buffer.encrypted_signature = encrypted_signature;
+    buffer.encrypted_current_state = encrypted_current_state;
     buffer.client_pubkey = client_pubkey;
     buffer.encryption_nonce = encryption_nonce;
     buffer.is_used = false;
@@ -60,10 +58,9 @@ pub fn handler(
 
 #[derive(Accounts)]
 #[instruction(
-    encrypted_miner_id_hash: [[u8; 32]; 4],
     encrypted_amount: [u8; 32],
     encrypted_destination: [[u8; 32]; 4],
-    encrypted_signature: [[u8; 32]; 8],
+    encrypted_current_state: [[u8; 32]; 3],
     client_pubkey: [u8; 32],
     encryption_nonce: u128,
     amount: u64,
@@ -81,7 +78,7 @@ pub struct CreateWithdrawBuffer<'info> {
     pub privacy_config: Account<'info, PrivacyConfig>,
 
     /// Withdraw buffer PDA
-    /// Derived from creator + encrypted_miner_id_hash for uniqueness
+    /// Derived from creator + encrypted_amount for uniqueness
     #[account(
         init,
         payer = creator,
@@ -89,7 +86,7 @@ pub struct CreateWithdrawBuffer<'info> {
         seeds = [
             WITHDRAW_BUFFER_SEED,
             creator.key().as_ref(),
-            &encrypted_miner_id_hash[0][..8],  // Use first 8 bytes for uniqueness
+            &encrypted_amount[..8],  // Use first 8 bytes for uniqueness
         ],
         bump,
     )]

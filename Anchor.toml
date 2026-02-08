@@ -6,9 +6,9 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-pow_protocol = "PoWgG9zPrzF2vFUQRTyU4L1aNMZmbsemxJgwhycjtS4"
+pow_protocol = "6DEmqXKEokfBz2wiREVthwbkDECvrWorkJNd48duatL2"
 pow_pool = "4DHpKjPiay8FiimQ4UFWnZY6tQVYwPXwiqu6445wwZif"
-pow_privacy = "ENCH3LVUcMHpei1ByFLGwS4cGd3FEVtER1D4ZXov4qhW"
+pow_privacy = "HHTo8FEGs8J7VfCD5yDg3ifoKozSaY2cbLfC2U418XjP"
 
 [programs.localnet]
 pow_pool = "Poo1111111111111111111111111111111111111111"
@@ -27,7 +27,7 @@ url = "https://api.apr.dev"
 
 [provider]
 cluster = "https://devnet.helius-rpc.com/?api-key=f4718f33-4936-4c0b-b947-e079b805c3c8"
-wallet = "keys/devnet-deployer.json"
+wallet = "~/.config/solana/id.json"
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"

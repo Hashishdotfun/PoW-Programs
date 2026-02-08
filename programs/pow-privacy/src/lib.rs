@@ -13,7 +13,7 @@ use instructions::*;
 use state::PrivacyConfigArgs;
 pub use errors::ErrorCode;
 
-declare_id!("ENCH3LVUcMHpei1ByFLGwS4cGd3FEVtER1D4ZXov4qhW");
+declare_id!("HHTo8FEGs8J7VfCD5yDg3ifoKozSaY2cbLfC2U418XjP");
 
 /// Helper function to convert [u64; 4] to [u8; 32]
 pub fn u64_array_to_bytes(arr: &[u64; 4]) -> [u8; 32] {
@@ -38,19 +38,19 @@ pub mod pow_privacy {
 
     // Off-chain circuit URLs (raw GitHub URLs for direct access)
     const STORE_CLAIM_URL: &str =
-        "https://raw.githubusercontent.com/Antoninw3/arcis/main/store_claim.arcis";
+        "https://raw.githubusercontent.com/Antoninw3/arc/main/store_claim.arcis";
     const VERIFY_AND_CLAIM_URL: &str =
-        "https://raw.githubusercontent.com/Antoninw3/arcis/main/verify_and_claim.arcis";
+        "https://raw.githubusercontent.com/Antoninw3/arc/main/verify_and_claim.arcis";
 
     // New balance management circuits
     const DEPOSIT_FEE_URL: &str =
-        "https://raw.githubusercontent.com/Antoninw3/arcis/main/deposit_fee.arcis";
+        "https://raw.githubusercontent.com/Antoninw3/arc/main/deposit_fee.arcis";
     const MINE_BLOCK_URL: &str =
-        "https://raw.githubusercontent.com/Antoninw3/arcis/main/mine_block.arcis";
+        "https://raw.githubusercontent.com/Antoninw3/arc/main/mine_block.arcis";
     const WITHDRAW_FEE_URL: &str =
-        "https://raw.githubusercontent.com/Antoninw3/arcis/main/withdraw_fee.arcis";
+        "https://raw.githubusercontent.com/Antoninw3/arc/main/withdraw_fee.arcis";
     const CHECK_BALANCE_URL: &str =
-        "https://raw.githubusercontent.com/Antoninw3/arcis/main/check_miner_balance.arcis";
+        "https://raw.githubusercontent.com/Antoninw3/arc/main/check_miner_balance.arcis";
 
     // =========================================================================
     // INITIALIZATION
@@ -243,21 +243,19 @@ pub mod pow_privacy {
     // BALANCE MANAGEMENT (Private)
     // =========================================================================
 
-    /// Create a deposit buffer with encrypted miner identification (Step 1)
+    /// Create a deposit buffer with encrypted amount and current state (Step 1)
     pub fn create_deposit_buffer(
         ctx: Context<CreateDepositBuffer>,
-        encrypted_miner_id_hash: [[u8; 32]; 4],
         encrypted_amount: [u8; 32],
-        encrypted_signature: [[u8; 32]; 8],
+        encrypted_current_state: [[u8; 32]; 3],
         client_pubkey: [u8; 32],
         encryption_nonce: u128,
         amount: u64,
     ) -> Result<()> {
         instructions::create_deposit_buffer::handler(
             ctx,
-            encrypted_miner_id_hash,
             encrypted_amount,
-            encrypted_signature,
+            encrypted_current_state,
             client_pubkey,
             encryption_nonce,
             amount,
@@ -275,20 +273,18 @@ pub mod pow_privacy {
     /// Create a withdraw buffer with encrypted data (Step 1)
     pub fn create_withdraw_buffer(
         ctx: Context<CreateWithdrawBuffer>,
-        encrypted_miner_id_hash: [[u8; 32]; 4],
         encrypted_amount: [u8; 32],
         encrypted_destination: [[u8; 32]; 4],
-        encrypted_signature: [[u8; 32]; 8],
+        encrypted_current_state: [[u8; 32]; 3],
         client_pubkey: [u8; 32],
         encryption_nonce: u128,
         amount: u64,
     ) -> Result<()> {
         instructions::create_withdraw_buffer::handler(
             ctx,
-            encrypted_miner_id_hash,
             encrypted_amount,
             encrypted_destination,
-            encrypted_signature,
+            encrypted_current_state,
             client_pubkey,
             encryption_nonce,
             amount,
@@ -430,12 +426,16 @@ pub mod pow_privacy {
 
     /// Callback for mine_block MPC computation
     /// Called by Arcium when the balance verification and deduction MPC completes
+    /// 
+    /// Note: If the miner had insufficient balance, the MPC circuit would have panicked
+    /// and this callback would never be called (transaction reverts automatically)
     #[arcium_callback(encrypted_ix = "mine_block")]
     pub fn mine_block_callback(
         ctx: Context<MineBlockCallback>,
         output: SignedComputationOutputs<MineBlockOutput>,
     ) -> Result<()> {
         // Verify the BLS signature on the computation output
+        // If this succeeds, it means the MPC ran successfully (balance was sufficient)
         let _verified_output = output.verify_output(
             &ctx.accounts.cluster_account,
             &ctx.accounts.computation_account,
@@ -445,16 +445,15 @@ pub mod pow_privacy {
         ctx.accounts.mine_block_buffer.balance_verified = true;
         ctx.accounts.mine_block_buffer.is_used = true;
 
-        // Note: The actual fee transfer from shared vault to pow-protocol
-        // will be done in the submit_block_private flow after MPC verification
-        // The MPC has already deducted the fee from the miner's encrypted balance
-
-        msg!("Mine block callback: balance verified and fee deducted");
+        msg!("Mine block callback: balance verified and fee deducted successfully");
         Ok(())
     }
 
     /// Callback for withdraw_fee MPC computation
     /// Called by Arcium when the withdrawal verification MPC completes
+    /// 
+    /// Note: If the miner had insufficient balance, the MPC circuit would have panicked
+    /// and this callback would never be called (transaction reverts automatically)
     #[arcium_callback(encrypted_ix = "withdraw_fee")]
     pub fn withdraw_fee_callback(
         ctx: Context<WithdrawFeeCallback>,
@@ -463,6 +462,7 @@ pub mod pow_privacy {
         use anchor_lang::system_program::{transfer, Transfer};
 
         // Verify the BLS signature on the computation output
+        // If this succeeds, it means the MPC ran successfully (balance was sufficient)
         let _verified_output = output.verify_output(
             &ctx.accounts.cluster_account,
             &ctx.accounts.computation_account,
@@ -473,7 +473,6 @@ pub mod pow_privacy {
         ctx.accounts.withdraw_buffer.is_approved = true;
 
         // Get the verified destination and amount from the buffer
-        // (In production, these would come from the MPC output)
         let destination = ctx.accounts.destination.key();
         let amount = ctx.accounts.withdraw_buffer.amount;
 

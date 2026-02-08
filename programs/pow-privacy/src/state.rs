@@ -257,7 +257,7 @@ pub struct PrivacyConfigArgs {
 // ============================================================================
 
 /// Buffer for depositing SOL to miner's encrypted balance
-/// Used to store encrypted miner_id_hash and amount for Arcium MPC
+/// Used to store encrypted amount and current state for Arcium MPC
 #[account]
 pub struct DepositBuffer {
     /// Owner who created this buffer (depositor's public wallet)
@@ -266,15 +266,12 @@ pub struct DepositBuffer {
     /// Amount of lamports being deposited (plaintext for SOL transfer)
     pub amount: u64,
 
-    /// Encrypted miner_id_hash (4 x 32 bytes = 128 bytes for [u64; 4])
-    /// This is hash(secret_key) encrypted for Arcium
-    pub encrypted_miner_id_hash: [[u8; 32]; 4],
-
     /// Encrypted amount for MPC (1 x 32 bytes for Enc<Shared, u64>)
     pub encrypted_amount: [u8; 32],
 
-    /// Encrypted signature for authentication (8 x 32 = 256 bytes for [u64; 8])
-    pub encrypted_signature: [[u8; 32]; 8],
+    /// Encrypted current state (3 x 32 bytes for MinerState: balance, nonce, reserved)
+    /// For new miners, this should be encrypted zeros
+    pub encrypted_current_state: [[u8; 32]; 3],
 
     /// Client's x25519 public key for Arcium decryption
     pub client_pubkey: [u8; 32],
@@ -296,9 +293,8 @@ impl DepositBuffer {
     pub const LEN: usize = 8 +  // discriminator
         32 +    // owner
         8 +     // amount
-        (4 * 32) +  // encrypted_miner_id_hash (4 ciphertexts)
         32 +    // encrypted_amount (1 ciphertext)
-        (8 * 32) +  // encrypted_signature (8 ciphertexts)
+        (3 * 32) +  // encrypted_current_state (3 ciphertexts)
         32 +    // client_pubkey
         16 +    // encryption_nonce
         1 +     // is_used
@@ -316,9 +312,6 @@ pub struct WithdrawBuffer {
     /// Requested withdrawal amount in lamports (plaintext for verification)
     pub amount: u64,
 
-    /// Encrypted miner_id_hash (4 x 32 bytes = 128 bytes for [u64; 4])
-    pub encrypted_miner_id_hash: [[u8; 32]; 4],
-
     /// Encrypted amount for MPC (1 x 32 bytes for Enc<Shared, u64>)
     pub encrypted_amount: [u8; 32],
 
@@ -326,8 +319,8 @@ pub struct WithdrawBuffer {
     /// This is where the SOL will be sent
     pub encrypted_destination: [[u8; 32]; 4],
 
-    /// Encrypted signature for authentication (8 x 32 = 256 bytes)
-    pub encrypted_signature: [[u8; 32]; 8],
+    /// Encrypted current state (3 x 32 bytes for MinerState: balance, nonce, reserved)
+    pub encrypted_current_state: [[u8; 32]; 3],
 
     /// Client's x25519 public key for Arcium decryption
     pub client_pubkey: [u8; 32],
@@ -358,10 +351,9 @@ impl WithdrawBuffer {
     pub const LEN: usize = 8 +  // discriminator
         32 +    // owner
         8 +     // amount
-        (4 * 32) +  // encrypted_miner_id_hash
         32 +    // encrypted_amount (1 ciphertext)
         (4 * 32) +  // encrypted_destination
-        (8 * 32) +  // encrypted_signature
+        (3 * 32) +  // encrypted_current_state (3 ciphertexts)
         32 +    // client_pubkey
         16 +    // encryption_nonce
         1 +     // is_used
@@ -373,23 +365,17 @@ impl WithdrawBuffer {
 }
 
 /// Buffer for mining block with balance verification
-/// Extends ClaimBuffer with balance-related encrypted data
+/// Stores encrypted protocol fee and current state for Arcium MPC
 #[account]
 pub struct MineBlockBuffer {
     /// Owner who created this buffer (relayer)
     pub owner: Pubkey,
 
-    /// Encrypted miner_id_hash (4 x 32 bytes = 128 bytes for [u64; 4])
-    pub encrypted_miner_id_hash: [[u8; 32]; 4],
-
     /// Encrypted protocol fee amount (1 x 32 bytes)
     pub encrypted_protocol_fee: [u8; 32],
 
-    /// Encrypted destination pubkey (4 x 32 = 128 bytes)
-    pub encrypted_destination: [[u8; 32]; 4],
-
-    /// Encrypted signature for authentication (8 x 32 = 256 bytes)
-    pub encrypted_signature: [[u8; 32]; 8],
+    /// Encrypted current state (3 x 32 bytes for MinerState: balance, nonce, reserved)
+    pub encrypted_current_state: [[u8; 32]; 3],
 
     /// Client's x25519 public key for Arcium decryption
     pub client_pubkey: [u8; 32],
@@ -406,6 +392,12 @@ pub struct MineBlockBuffer {
     /// Whether balance verification passed
     pub balance_verified: bool,
 
+    /// Protocol fee amount (plaintext, for verification)
+    pub protocol_fee: u64,
+
+    /// Expected balance after deduction (0 = not computed yet)
+    pub expected_balance_after: u64,
+
     /// Creation timestamp
     pub created_at: i64,
 
@@ -416,15 +408,15 @@ pub struct MineBlockBuffer {
 impl MineBlockBuffer {
     pub const LEN: usize = 8 +  // discriminator
         32 +    // owner
-        (4 * 32) +  // encrypted_miner_id_hash
         32 +    // encrypted_protocol_fee
-        (4 * 32) +  // encrypted_destination
-        (8 * 32) +  // encrypted_signature
+        (3 * 32) +  // encrypted_current_state (3 ciphertexts)
         32 +    // client_pubkey
         16 +    // encryption_nonce
         32 +    // secret_hash
         1 +     // is_used
         1 +     // balance_verified
+        8 +     // protocol_fee
+        8 +     // expected_balance_after
         8 +     // created_at
         1;      // bump
 }
@@ -572,4 +564,57 @@ pub struct BalanceVerified {
     pub protocol_fee: u64,
     /// Timestamp
     pub timestamp: i64,
+}
+
+// ============================================================================
+// MPC CIRCUIT OUTPUT TYPES (Arcium encrypted-ixs)
+// ============================================================================
+
+/// Persistent state for a miner's encrypted balance (from Arcium MPC)
+/// Corresponds to encrypted-ixs MinerState
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default)]
+pub struct MinerState {
+    /// Current balance in lamports
+    pub balance: u64,
+    /// Transaction nonce (anti-replay)
+    pub nonce: u64,
+    /// Reserved for future use
+    pub reserved: u64,
+}
+
+/// Result of mining a block (deducting protocol fee)
+/// success: false triggers revert on-chain
+/// Corresponds to encrypted-ixs MineBlockResult
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy)]
+pub struct MineBlockResult {
+    /// New balance after fee deduction
+    pub new_balance: u64,
+    /// The protocol fee that was deducted
+    pub fee_deducted: u64,
+    /// Whether mining succeeded (enough balance)
+    pub success: bool,
+}
+
+/// Result of depositing fee to miner's balance
+/// Corresponds to encrypted-ixs DepositFeeResult
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy)]
+pub struct DepositFeeResult {
+    /// New balance after deposit
+    pub new_balance: u64,
+    /// Whether deposit succeeded
+    pub success: bool,
+}
+
+/// Result of withdrawing fees to a destination
+/// Corresponds to encrypted-ixs WithdrawFeeResult
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy)]
+pub struct WithdrawFeeResult {
+    /// The destination pubkey to send SOL to (4 x u64 = 32 bytes)
+    pub destination: [u64; 4],
+    /// Amount to withdraw
+    pub amount: u64,
+    /// New balance after withdrawal
+    pub new_balance: u64,
+    /// Whether withdrawal succeeded
+    pub success: bool,
 }

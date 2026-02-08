@@ -1,5 +1,11 @@
 # Build artifacts
 target/
+artifacts/
+build/
+keys/
+scripts/
+AGENTS.md
+.mint-info.json
 node_modules/
 
 # Anchor

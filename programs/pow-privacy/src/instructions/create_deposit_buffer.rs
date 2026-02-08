@@ -4,18 +4,17 @@ use crate::constants::*;
 use crate::errors::ErrorCode;
 use crate::state::*;
 
-/// Create a deposit buffer with encrypted miner identification
+/// Create a deposit buffer with encrypted amount and current state
 /// This is step 1 of the deposit process
 ///
 /// Flow:
-/// 1. Miner creates DepositBuffer with encrypted miner_id_hash
+/// 1. Miner creates DepositBuffer with encrypted amount and current state
 /// 2. Miner calls deposit_private to transfer SOL and trigger MPC
-/// 3. MPC verifies signature and updates encrypted balance
+/// 3. MPC updates encrypted balance and returns new state
 pub fn handler(
     ctx: Context<CreateDepositBuffer>,
-    encrypted_miner_id_hash: [[u8; 32]; 4],
     encrypted_amount: [u8; 32],
-    encrypted_signature: [[u8; 32]; 8],
+    encrypted_current_state: [[u8; 32]; 3],
     client_pubkey: [u8; 32],
     encryption_nonce: u128,
     amount: u64,
@@ -33,9 +32,8 @@ pub fn handler(
 
     buffer.owner = ctx.accounts.depositor.key();
     buffer.amount = amount;
-    buffer.encrypted_miner_id_hash = encrypted_miner_id_hash;
     buffer.encrypted_amount = encrypted_amount;
-    buffer.encrypted_signature = encrypted_signature;
+    buffer.encrypted_current_state = encrypted_current_state;
     buffer.client_pubkey = client_pubkey;
     buffer.encryption_nonce = encryption_nonce;
     buffer.is_used = false;
@@ -54,9 +52,8 @@ pub fn handler(
 
 #[derive(Accounts)]
 #[instruction(
-    encrypted_miner_id_hash: [[u8; 32]; 4],
     encrypted_amount: [u8; 32],
-    encrypted_signature: [[u8; 32]; 8],
+    encrypted_current_state: [[u8; 32]; 3],
     client_pubkey: [u8; 32],
     encryption_nonce: u128,
     amount: u64,
@@ -74,7 +71,7 @@ pub struct CreateDepositBuffer<'info> {
     pub privacy_config: Account<'info, PrivacyConfig>,
 
     /// Deposit buffer PDA
-    /// Derived from owner + encrypted_miner_id_hash to ensure uniqueness
+    /// Derived from owner + encrypted_amount for uniqueness
     #[account(
         init,
         payer = depositor,
@@ -82,7 +79,7 @@ pub struct CreateDepositBuffer<'info> {
         seeds = [
             DEPOSIT_BUFFER_SEED,
             depositor.key().as_ref(),
-            &encrypted_miner_id_hash[0][..8],  // Use first 8 bytes for uniqueness
+            &encrypted_amount[..8],  // Use first 8 bytes for uniqueness
         ],
         bump,
     )]

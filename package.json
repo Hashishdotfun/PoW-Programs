@@ -1,0 +1,30 @@
+{
+  "name": "pow-programs",
+  "version": "0.1.0",
+  "description": "PoW Mining Protocol with Arcium Privacy Layer",
+  "scripts": {
+    "test": "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts",
+    "create-token": "ts-node scripts/create-token.ts",
+    "init-protocol": "ts-node scripts/init-protocol.ts",
+    "init-privacy": "ts-node scripts/init-privacy.ts",
+    "init-comp-defs": "ts-node scripts/init-comp-defs.ts",
+    "init-all": "ts-node scripts/init-protocol.ts && ts-node scripts/init-privacy.ts && ts-node scripts/init-comp-defs.ts"
+  },
+  "dependencies": {
+    "@arcium-hq/client": "^0.7.0",
+    "@coral-xyz/anchor": "^0.30.1",
+    "@solana/spl-token": "^0.4.6",
+    "@solana/spl-token-metadata": "^0.1.4",
+    "@solana/web3.js": "^1.95.3"
+  },
+  "devDependencies": {
+    "@types/bn.js": "^5.1.5",
+    "@types/chai": "^4.3.5",
+    "@types/mocha": "^10.0.1",
+    "chai": "^4.3.7",
+    "mocha": "^10.2.0",
+    "ts-mocha": "^10.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.0.0"
+  }
+}
