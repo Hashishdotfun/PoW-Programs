@@ -91,11 +91,7 @@ pub fn handler(
     // Verify protocol is active
     require!(config.is_active, ErrorCode::ProtocolInactive);
 
-    // Verify caller is the authorized relayer
-    require!(
-        ctx.accounts.relayer.key() == config.relayer,
-        ErrorCode::Unauthorized
-    );
+    // NOTE: Relayer check removed - anyone can submit valid PoW blocks
 
     // Verify max claims not reached
     require!(
