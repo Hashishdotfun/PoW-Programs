@@ -13,7 +13,7 @@ use instructions::*;
 use state::PrivacyConfigArgs;
 pub use errors::ErrorCode;
 
-declare_id!("HHTo8FEGs8J7VfCD5yDg3ifoKozSaY2cbLfC2U418XjP");
+declare_id!("6Eu1vnF4qYvKLCuXWmqYHGMnyFTXcq4RZpd6rosvPxM4");
 
 /// Helper function to convert [u64; 4] to [u8; 32]
 pub fn u64_array_to_bytes(arr: &[u64; 4]) -> [u8; 32] {
@@ -37,12 +37,8 @@ pub mod pow_privacy {
     use arcium_macros::circuit_hash;
 
     // Off-chain circuit URLs (raw GitHub URLs for direct access)
-    const STORE_CLAIM_URL: &str =
-        "https://raw.githubusercontent.com/Antoninw3/arc/main/store_claim.arcis";
     const VERIFY_AND_CLAIM_URL: &str =
         "https://raw.githubusercontent.com/Antoninw3/arc/main/verify_and_claim.arcis";
-
-    // New balance management circuits
     const DEPOSIT_FEE_URL: &str =
         "https://raw.githubusercontent.com/Antoninw3/arc/main/deposit_fee.arcis";
     const MINE_BLOCK_URL: &str =
@@ -64,19 +60,6 @@ pub mod pow_privacy {
     // =========================================================================
     // COMPUTATION DEFINITION INITIALIZATION
     // =========================================================================
-
-    /// Initialize store_claim computation definition (off-chain circuit)
-    pub fn init_store_claim_comp_def(ctx: Context<InitStoreClaimCompDef>) -> Result<()> {
-        init_comp_def(
-            ctx.accounts,
-            Some(CircuitSource::OffChain(OffChainCircuitSource {
-                source: STORE_CLAIM_URL.to_string(),
-                hash: circuit_hash!("store_claim"),
-            })),
-            None,
-        )?;
-        Ok(())
-    }
 
     /// Initialize verify_and_claim computation definition (off-chain circuit)
     pub fn init_verify_and_claim_comp_def(ctx: Context<InitVerifyAndClaimCompDef>) -> Result<()> {
@@ -180,17 +163,37 @@ pub mod pow_privacy {
     // BLOCK SUBMISSION (Relayer)
     // =========================================================================
 
-    /// Relayer submits a block with encrypted destination (Transaction 2)
-    /// Reads from claim buffer and queues Arcium MPC computation
+    /// Relayer submits a block with encrypted data directly as parameters
+    /// Verifies PoW, queues MPC computation (mine_block) to verify miner balance,
+    /// then CPIs to pow-protocol to mint tokens
+    ///
+    /// # Arguments
+    /// * `computation_offset` - Arcium computation offset
+    /// * `nonce` - The PoW nonce found by miner
+    /// * `client_pubkey` - x25519 public key for Arcium decryption
+    /// * `encryption_nonce` - Nonce used with RescueCipher
+    /// * `secret_hash` - SHA256 hash of the claim secret
+    /// * `encrypted_destination` - Encrypted destination pubkey (4 x 32 bytes)
+    /// * `encrypted_current_state` - Encrypted miner state (3 x 32 bytes)
     pub fn submit_block_private(
         ctx: Context<SubmitBlockPrivate>,
         computation_offset: u64,
         nonce: u128,
+        client_pubkey: [u8; 32],
+        encryption_nonce: u128,
+        secret_hash: [u8; 32],
+        encrypted_destination: [[u8; 32]; 4],
+        encrypted_current_state: [[u8; 32]; 3],
     ) -> Result<()> {
         instructions::submit_block_private::handler(
             ctx,
             computation_offset,
             nonce,
+            client_pubkey,
+            encryption_nonce,
+            secret_hash,
+            encrypted_destination,
+            encrypted_current_state,
         )
     }
 
@@ -317,26 +320,6 @@ pub mod pow_privacy {
     // ARCIUM MPC CALLBACKS
     // =========================================================================
 
-    /// Callback for store_claim MPC computation
-    /// Called by Arcium when the MPC computation completes
-    #[arcium_callback(encrypted_ix = "store_claim")]
-    pub fn store_claim_callback(
-        ctx: Context<StoreClaimCallback>,
-        output: SignedComputationOutputs<StoreClaimOutput>,
-    ) -> Result<()> {
-        // Verify the BLS signature on the computation output
-        let _verified_output = output.verify_output(
-            &ctx.accounts.cluster_account,
-            &ctx.accounts.computation_account,
-        )?;
-
-        // Update the config to track the claim
-        ctx.accounts.privacy_config.total_claims += 1;
-
-        msg!("Store claim callback processed successfully");
-        Ok(())
-    }
-
     /// Callback for verify_and_claim MPC computation
     /// Called by Arcium when the verification MPC completes
     ///
@@ -426,24 +409,22 @@ pub mod pow_privacy {
 
     /// Callback for mine_block MPC computation
     /// Called by Arcium when the balance verification and deduction MPC completes
-    /// 
-    /// Note: If the miner had insufficient balance, the MPC circuit would have panicked
-    /// and this callback would never be called (transaction reverts automatically)
+    ///
+    /// Note: If the miner had insufficient balance, the MPC circuit would have returned
+    /// success: false and this callback marks verification as failed
     #[arcium_callback(encrypted_ix = "mine_block")]
     pub fn mine_block_callback(
         ctx: Context<MineBlockCallback>,
         output: SignedComputationOutputs<MineBlockOutput>,
     ) -> Result<()> {
         // Verify the BLS signature on the computation output
-        // If this succeeds, it means the MPC ran successfully (balance was sufficient)
         let _verified_output = output.verify_output(
             &ctx.accounts.cluster_account,
             &ctx.accounts.computation_account,
         )?;
 
-        // Mark buffer as verified
-        ctx.accounts.mine_block_buffer.balance_verified = true;
-        ctx.accounts.mine_block_buffer.is_used = true;
+        // Mark claim as verified (MPC confirmed miner had sufficient balance)
+        ctx.accounts.claim.verification_pending = false;
 
         msg!("Mine block callback: balance verified and fee deducted successfully");
         Ok(())
@@ -518,36 +499,6 @@ pub mod pow_privacy {
     // =========================================================================
     // ACCOUNT STRUCTS (must be inside arcium_program module)
     // =========================================================================
-
-
-    /// Initialize store_claim computation definition accounts
-    #[init_computation_definition_accounts("store_claim", payer)]
-    #[derive(Accounts)]
-    pub struct InitStoreClaimCompDef<'info> {
-        #[account(mut)]
-        pub payer: Signer<'info>,
-
-        #[account(
-            mut,
-            address = derive_mxe_pda!()
-        )]
-        pub mxe_account: Box<Account<'info, MXEAccount>>,
-
-        /// CHECK: Initialized by Arcium program
-        #[account(mut)]
-        pub comp_def_account: UncheckedAccount<'info>,
-
-        /// CHECK: address_lookup_table, checked by arcium program.
-        #[account(mut, address = derive_mxe_lut_pda!(mxe_account.lut_offset_slot))]
-        pub address_lookup_table: UncheckedAccount<'info>,
-
-        /// CHECK: lut_program is the Address Lookup Table program.
-        #[account(address = LUT_PROGRAM_ID)]
-        pub lut_program: UncheckedAccount<'info>,
-
-        pub arcium_program: Program<'info, Arcium>,
-        pub system_program: Program<'info, System>,
-    }
 
     /// Initialize verify_and_claim computation definition accounts
     #[init_computation_definition_accounts("verify_and_claim", payer)]
@@ -697,31 +648,6 @@ pub mod pow_privacy {
     // Computation definition offsets are defined in their respective instruction files
     // They are generated by the comp_def_offset macro from arcium_anchor
 
-    /// Callback accounts for store_claim
-    /// IMPORTANT: Account order must match Arcium's expected callback format
-    #[callback_accounts("store_claim")]
-    #[derive(Accounts)]
-    pub struct StoreClaimCallback<'info> {
-        pub arcium_program: Program<'info, Arcium>,
-
-        pub comp_def_account: Account<'info, ComputationDefinitionAccount>,
-
-        pub mxe_account: Account<'info, MXEAccount>,
-
-        /// CHECK: computation_account, passed to verify_output
-        pub computation_account: UncheckedAccount<'info>,
-
-        pub cluster_account: Account<'info, Cluster>,
-
-        #[account(address = anchor_lang::solana_program::sysvar::instructions::ID)]
-        /// CHECK: instructions_sysvar
-        pub instructions_sysvar: AccountInfo<'info>,
-
-        // Custom accounts
-        #[account(mut)]
-        pub privacy_config: Account<'info, crate::state::PrivacyConfig>,
-    }
-
     /// Callback accounts for verify_and_claim
     /// IMPORTANT: Account order must match Arcium's expected callback format
     #[callback_accounts("verify_and_claim")]
@@ -796,6 +722,7 @@ pub mod pow_privacy {
     }
 
     /// Callback accounts for mine_block
+    /// Called after submit_block_private queues the MPC computation
     #[callback_accounts("mine_block")]
     #[derive(Accounts)]
     pub struct MineBlockCallback<'info> {
@@ -814,24 +741,13 @@ pub mod pow_privacy {
         /// CHECK: instructions_sysvar
         pub instructions_sysvar: AccountInfo<'info>,
 
-        // Custom accounts
+        // Custom accounts - the claim created by submit_block_private
         #[account(mut)]
         pub privacy_config: Box<Account<'info, crate::state::PrivacyConfig>>,
 
+        /// The claim to mark as verified
         #[account(mut)]
-        pub mine_block_buffer: Box<Account<'info, crate::state::MineBlockBuffer>>,
-
-        /// Shared fee vault (SOL source)
-        /// CHECK: PDA verified by seeds
-        #[account(mut)]
-        pub shared_fee_vault: UncheckedAccount<'info>,
-
-        /// PoW protocol fee vault (destination for protocol fee)
-        /// CHECK: PDA from pow-protocol
-        #[account(mut)]
-        pub pow_fee_vault: UncheckedAccount<'info>,
-
-        pub system_program: Program<'info, System>,
+        pub claim: Box<Account<'info, crate::state::Claim>>,
     }
 
     /// Callback accounts for withdraw_fee
