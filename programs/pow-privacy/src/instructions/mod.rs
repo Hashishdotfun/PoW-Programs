@@ -1,6 +1,7 @@
 #![allow(ambiguous_glob_reexports)]
 
 pub mod initialize;
+pub mod initialize_vaults;
 pub mod submit_block_private;
 pub mod claim_reward;
 pub mod deposit_fee;
@@ -16,6 +17,7 @@ pub mod withdraw_private;
 // The `handler` functions have the same name across modules but are always
 // called via their full path (e.g., instructions::initialize::handler)
 pub use initialize::*;
+pub use initialize_vaults::*;
 pub use submit_block_private::*;
 pub use claim_reward::*;
 pub use deposit_fee::*;

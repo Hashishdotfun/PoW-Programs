@@ -13,7 +13,7 @@
     "create-pool": "ts-node scripts/create-orca-pool.ts"
   },
   "dependencies": {
-    "@arcium-hq/client": "^0.7.0",
+    "@arcium-hq/client": "^0.8.0",
     "@coral-xyz/anchor": "^0.30.1",
     "@orca-so/whirlpools": "^6.0.0",
     "@solana/kit": "^5.5.1",

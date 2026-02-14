@@ -14,7 +14,7 @@ use crate::state::*;
 // Import ID, ID_CONST, and ArciumSignerAccount for Arcium macros
 use crate::{ID, ID_CONST, ArciumSignerAccount};
 
-use pow_protocol::state::{DeviceAttestation, MinerStats, MintAuthority, PowConfig};
+use pow_protocol::state::{MinerStats, MintAuthority, PowConfig};
 
 // Computation definition offset for mine_block (verifies balance and deducts fee)
 const COMP_DEF_OFFSET_MINE_BLOCK: u32 = comp_def_offset("mine_block");
@@ -178,6 +178,8 @@ pub fn handler(
     // miner, pow_config, other_pool, mint_authority, mint,
     // miner_token_account, miner_stats, fee_collector, attestation,
     // token_program, system_program
+    // For Option<Account> in pow-protocol, pass the program's own ID to signal None
+    let attestation_none = ctx.accounts.pow_program.key();
     let cpi_accounts = [
         AccountMeta::new(ctx.accounts.privacy_authority.key(), true),
         AccountMeta::new(ctx.accounts.pow_config.key(), false),
@@ -187,7 +189,7 @@ pub fn handler(
         AccountMeta::new(ctx.accounts.shared_token_vault.key(), false),
         AccountMeta::new(ctx.accounts.privacy_miner_stats.key(), false),
         AccountMeta::new(ctx.accounts.pow_fee_collector.key(), false),
-        AccountMeta::new_readonly(ctx.accounts.pow_attestation.key(), false),
+        AccountMeta::new_readonly(attestation_none, false),
         AccountMeta::new_readonly(ctx.accounts.token_program.key(), false),
         AccountMeta::new_readonly(ctx.accounts.system_program.key(), false),
     ];
@@ -209,7 +211,7 @@ pub fn handler(
             ctx.accounts.shared_token_vault.to_account_info(),
             ctx.accounts.privacy_miner_stats.to_account_info(),
             ctx.accounts.pow_fee_collector.to_account_info(),
-            ctx.accounts.pow_attestation.to_account_info(),
+            ctx.accounts.pow_program.to_account_info(),
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.system_program.to_account_info(),
         ],
@@ -385,10 +387,6 @@ pub struct SubmitBlockPrivate<'info> {
     /// CHECK: PDA of pow-protocol, validated during CPI
     #[account(mut)]
     pub pow_fee_collector: UncheckedAccount<'info>,
-
-    /// Device attestation PDA for privacy_authority
-    /// CHECK: Validated by pow-protocol during CPI (normal pool skips attestation check)
-    pub pow_attestation: Account<'info, DeviceAttestation>,
 
     /// The pow-protocol program
     /// CHECK: Verified by constraint

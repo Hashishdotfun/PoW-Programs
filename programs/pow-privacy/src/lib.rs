@@ -13,7 +13,7 @@ use instructions::*;
 use state::PrivacyConfigArgs;
 pub use errors::ErrorCode;
 
-declare_id!("9iC7Ez6VcqG9TvPEZ31szdnhUrsCYBvmj2u9YeDBWErT");
+declare_id!("DJB2PeDYBLczs5ZxmUrqpoEAuejgdP516J3fNsEXVY5f");
 
 /// Helper function to convert [u64; 4] to [u8; 32]
 pub fn u64_array_to_bytes(arr: &[u64; 4]) -> [u8; 32] {
@@ -55,6 +55,11 @@ pub mod pow_privacy {
     /// Initialize the privacy protocol with shared vaults
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         instructions::initialize::handler(ctx)
+    }
+
+    /// Initialize missing vault PDAs (shared_token_vault) when privacy_config already exists
+    pub fn initialize_vaults(ctx: Context<InitializeVaults>) -> Result<()> {
+        instructions::initialize_vaults::handler(ctx)
     }
 
     // =========================================================================
