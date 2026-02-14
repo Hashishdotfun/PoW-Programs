@@ -34,7 +34,8 @@ pub fn handler(ctx: Context<SubmitProof>, nonce: u128) -> Result<()> {
     // ==========================================================================
 
     if ctx.accounts.pow_config.pool_id == POOL_SEEKER {
-        let attestation = &mut ctx.accounts.attestation;
+        let attestation = ctx.accounts.attestation.as_mut()
+            .ok_or(PowError::AttestationRequired)?;
         require!(
             !attestation.is_used,
             PowError::AttestationAlreadyUsed
@@ -479,13 +480,13 @@ pub struct SubmitProof<'info> {
     )]
     pub fee_collector: AccountInfo<'info>,
 
-    /// Attestation device du mineur (PDA, writable to mark as used)
+    /// Attestation device du mineur (optionnel, requis uniquement pour la pool seeker)
     #[account(
         mut,
         seeds = [DEVICE_ATTEST_SEED, miner.key().as_ref()],
         bump,
     )]
-    pub attestation: Account<'info, DeviceAttestation>,
+    pub attestation: Option<Account<'info, DeviceAttestation>>,
 
     /// Programme Token
     pub token_program: Interface<'info, TokenInterface>,
