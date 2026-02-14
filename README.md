@@ -36,7 +36,7 @@ Core PoW protocol with dual pool system for token minting based on SHA-256 hash 
 
 **Dual Pool System:**
 - **Pool Normal** (`pool_id=0`) — Open to all miners, no restrictions
-- **Pool Seeker** (`pool_id=1`) — Requires TEE device attestation (valid 60s, single-use)
+- **Pool Seeker** (`pool_id=1`) — Requires TEE device attestation for Seekers (valid 60s, single-use)
 
 Each pool has its own `PowConfig` PDA. Reward rates are halved per pool to maintain the same total emission schedule.
 
@@ -188,16 +188,6 @@ encrypted-ixs/           # Arcium circuit definitions (.arcis)
 ├── Cargo.toml
 └── src/lib.rs            # 6 circuits: deposit_fee, mine_block, withdraw_fee, etc.
 
-scripts/                  # Deployment & initialization scripts
-├── init-protocol.ts      # Initialize pow-protocol pools
-├── init-privacy.ts       # Initialize pow-privacy + comp defs
-├── init-comp-defs.ts     # Initialize Arcium computation definitions
-├── init-vaults.ts        # Create missing vault PDAs
-├── create-token.ts       # Create HASH token mint (SPL Token 2022)
-├── create-orca-pool.ts   # Create Orca liquidity pool
-└── set-attestation-authority.ts  # Set TEE attestation backend key
-```
-
 ## Important Constants
 
 ```
@@ -264,28 +254,6 @@ anchor deploy --provider.cluster devnet
 
 # Deploy specific program
 anchor deploy -p pow-privacy --provider.cluster devnet
-```
-
-## Initialization (Devnet)
-
-```bash
-# 1. Create HASH token mint (SPL Token 2022)
-npx ts-node scripts/create-token.ts
-
-# 2. Initialize pow-protocol pools (normal + seeker)
-npx ts-node scripts/init-protocol.ts
-
-# 3. Initialize pow-privacy + Arcium MPC
-npx ts-node scripts/init-privacy.ts
-
-# 4. Initialize Arcium computation definitions
-npx ts-node scripts/init-comp-defs.ts
-
-# 5. (Optional) Create missing vault PDAs
-npx ts-node scripts/init-vaults.ts
-
-# 6. (Optional) Set TEE attestation authority for seeker pool
-npx ts-node scripts/set-attestation-authority.ts
 ```
 
 ## Testing
