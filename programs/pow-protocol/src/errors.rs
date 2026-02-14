@@ -137,4 +137,27 @@ pub enum PowError {
 
     #[msg("Account already exists")]
     AccountAlreadyExists,
+
+    // =============================================================================
+    // ERREURS D'ATTESTATION DEVICE
+    // =============================================================================
+
+    #[msg("Device attestation expired (>60s)")]
+    AttestationExpired,
+
+    #[msg("Invalid attestation authority")]
+    InvalidAttestationAuthority,
+
+    #[msg("Device attestation required but not provided")]
+    AttestationRequired,
+
+    #[msg("Attestation already used, re-attest before submitting another proof")]
+    AttestationAlreadyUsed,
+
+    // =============================================================================
+    // ERREURS DE POOL
+    // =============================================================================
+
+    #[msg("Invalid pool ID")]
+    InvalidPoolId,
 }

@@ -14,7 +14,7 @@ use crate::state::*;
 // Import ID, ID_CONST, and ArciumSignerAccount for Arcium macros
 use crate::{ID, ID_CONST, ArciumSignerAccount};
 
-use pow_protocol::state::{MinerStats, PowConfig};
+use pow_protocol::state::{DeviceAttestation, MinerStats, MintAuthority, PowConfig};
 
 // Computation definition offset for mine_block (verifies balance and deducts fee)
 const COMP_DEF_OFFSET_MINE_BLOCK: u32 = comp_def_offset("mine_block");
@@ -174,13 +174,20 @@ pub fn handler(
     ix_data[..8].copy_from_slice(&SUBMIT_PROOF_DISCRIMINATOR);
     ix_data[8..24].copy_from_slice(&nonce.to_le_bytes());
 
+    // Account order must match on-chain SubmitProof struct:
+    // miner, pow_config, other_pool, mint_authority, mint,
+    // miner_token_account, miner_stats, fee_collector, attestation,
+    // token_program, system_program
     let cpi_accounts = [
         AccountMeta::new(ctx.accounts.privacy_authority.key(), true),
         AccountMeta::new(ctx.accounts.pow_config.key(), false),
+        AccountMeta::new_readonly(ctx.accounts.pow_other_pool.key(), false),
+        AccountMeta::new_readonly(ctx.accounts.pow_mint_authority.key(), false),
         AccountMeta::new(ctx.accounts.mint.key(), false),
         AccountMeta::new(ctx.accounts.shared_token_vault.key(), false),
         AccountMeta::new(ctx.accounts.privacy_miner_stats.key(), false),
         AccountMeta::new(ctx.accounts.pow_fee_collector.key(), false),
+        AccountMeta::new_readonly(ctx.accounts.pow_attestation.key(), false),
         AccountMeta::new_readonly(ctx.accounts.token_program.key(), false),
         AccountMeta::new_readonly(ctx.accounts.system_program.key(), false),
     ];
@@ -196,10 +203,13 @@ pub fn handler(
         &[
             ctx.accounts.privacy_authority.to_account_info(),
             ctx.accounts.pow_config.to_account_info(),
+            ctx.accounts.pow_other_pool.to_account_info(),
+            ctx.accounts.pow_mint_authority.to_account_info(),
             ctx.accounts.mint.to_account_info(),
             ctx.accounts.shared_token_vault.to_account_info(),
             ctx.accounts.privacy_miner_stats.to_account_info(),
             ctx.accounts.pow_fee_collector.to_account_info(),
+            ctx.accounts.pow_attestation.to_account_info(),
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.system_program.to_account_info(),
         ],
@@ -352,9 +362,15 @@ pub struct SubmitBlockPrivate<'info> {
 
     // === pow-protocol accounts for CPI (using Box for large accounts) ===
 
-    /// PowConfig from main protocol
+    /// PowConfig from normal pool (pool_id=0) - privacy mines the normal pool
     #[account(mut)]
     pub pow_config: Box<Account<'info, PowConfig>>,
+
+    /// Other pool PowConfig (seeker pool, pool_id=1) - read-only for supply cap
+    pub pow_other_pool: Box<Account<'info, PowConfig>>,
+
+    /// Shared mint authority PDA from pow-protocol
+    pub pow_mint_authority: Account<'info, MintAuthority>,
 
     /// Token mint
     #[account(mut)]
@@ -369,6 +385,10 @@ pub struct SubmitBlockPrivate<'info> {
     /// CHECK: PDA of pow-protocol, validated during CPI
     #[account(mut)]
     pub pow_fee_collector: UncheckedAccount<'info>,
+
+    /// Device attestation PDA for privacy_authority
+    /// CHECK: Validated by pow-protocol during CPI (normal pool skips attestation check)
+    pub pow_attestation: Account<'info, DeviceAttestation>,
 
     /// The pow-protocol program
     /// CHECK: Verified by constraint

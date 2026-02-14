@@ -14,12 +14,16 @@ use crate::state::PowConfig;
 pub struct UpdateConfigParams {
     /// Nouvelle autorité (si Some)
     pub new_authority: Option<Pubkey>,
-    
+
     /// Nouvelle difficulté minimum
     pub new_min_difficulty: Option<u128>,
-    
+
     /// Mettre en pause / reprendre
     pub pause: Option<bool>,
+
+    /// Backend pubkey autorisée à créer des attestations device
+    /// Set to Some(Pubkey::default()) to disable attestation requirement
+    pub attestation_authority: Option<Pubkey>,
 }
 
 /// Met à jour la configuration du protocole
@@ -63,6 +67,12 @@ pub fn handler(ctx: Context<UpdateConfig>, params: UpdateConfigParams) -> Result
     if let Some(pause) = params.pause {
         msg!("Protocol pause state: {} -> {}", config.is_paused, pause);
         config.is_paused = pause;
+    }
+
+    // Attestation authority
+    if let Some(attest_auth) = params.attestation_authority {
+        msg!("Attestation authority: {} -> {}", config.attestation_authority, attest_auth);
+        config.attestation_authority = attest_auth;
     }
 
     msg!("Config updated successfully");
@@ -142,7 +152,7 @@ pub struct UpdateConfig<'info> {
     /// Configuration du protocole
     #[account(
         mut,
-        seeds = [POW_CONFIG_SEED],
+        seeds = [POW_CONFIG_SEED, &[pow_config.pool_id]],
         bump = pow_config.bump,
         has_one = authority @ PowError::Unauthorized,
     )]
@@ -160,7 +170,7 @@ pub struct TransferAuthority<'info> {
     /// Configuration du protocole
     #[account(
         mut,
-        seeds = [POW_CONFIG_SEED],
+        seeds = [POW_CONFIG_SEED, &[pow_config.pool_id]],
         bump = pow_config.bump,
     )]
     pub pow_config: Account<'info, PowConfig>,
@@ -174,7 +184,7 @@ pub struct AddPendingReward<'info> {
     /// Configuration du protocole
     #[account(
         mut,
-        seeds = [POW_CONFIG_SEED],
+        seeds = [POW_CONFIG_SEED, &[pow_config.pool_id]],
         bump = pow_config.bump,
     )]
     pub pow_config: Account<'info, PowConfig>,
@@ -188,7 +198,7 @@ pub struct RecordTransferBurn<'info> {
     /// Configuration du protocole
     #[account(
         mut,
-        seeds = [POW_CONFIG_SEED],
+        seeds = [POW_CONFIG_SEED, &[pow_config.pool_id]],
         bump = pow_config.bump,
     )]
     pub pow_config: Account<'info, PowConfig>,

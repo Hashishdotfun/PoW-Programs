@@ -40,13 +40,15 @@ pub const BLOCKS_PER_2_YEARS: u64 = 1_051_200;
 // REWARD PARAMETERS (Émission exponentielle décroissante)
 // =============================================================================
 
-/// Reward initial normal (après 1ère année) - ~0.0574 tokens par bloc
-/// En base 10^9: 57_400_000
-pub const R0_NORMAL: u64 = 57_400_000;
+/// Reward initial normal (après 1ère année) - ~0.0287 tokens par bloc
+/// Divisé par 2 car 2 pools = 2x blocs produits
+/// En base 10^9: 28_700_000
+pub const R0_NORMAL: u64 = 28_700_000;
 
-/// Reward initial boosté (1ère année, x1.5) - ~0.0887 tokens par bloc
-/// En base 10^9: 88_700_000
-pub const R0_BOOST: u64 = 88_700_000;
+/// Reward initial boosté (1ère année, x1.5) - ~0.0444 tokens par bloc
+/// Divisé par 2 car 2 pools = 2x blocs produits
+/// En base 10^9: 44_350_000
+pub const R0_BOOST: u64 = 44_350_000;
 
 /// Facteur de décroissance k (en millionièmes pour précision)
 /// k ≈ 0.999999943 → stocké comme 999_999_943 / 1_000_000_000
@@ -60,8 +62,8 @@ pub const BOOST_DURATION: i64 = SECONDS_PER_YEAR;
 // FEE PARAMETERS (Fee SOL progressive)
 // =============================================================================
 
-/// Fee initiale: 0.005 SOL (en lamports)
-pub const FEE_INITIAL_SOL: u64 = 5_000_000; // 0.005 SOL = 5,000,000 lamports
+/// Fee initiale: 0.001 SOL (en lamports)
+pub const FEE_INITIAL_SOL: u64 = 1_000_000; // 0.001 SOL = 1,000,000 lamports
 
 /// Multiplicateur tous les 2 ans: 1.5x
 /// Stocké comme 150 / 100 pour éviter les floats
@@ -174,3 +176,18 @@ pub const FEE_VAULT_SEED: &[u8] = b"fee_vault";
 pub const TEAM_VAULT_SEED: &[u8] = b"team_vault";
 pub const LP_VAULT_SEED: &[u8] = b"lp_vault";
 pub const MINER_STATS_SEED: &[u8] = b"miner_stats";
+pub const DEVICE_ATTEST_SEED: &[u8] = b"device_attest";
+pub const MINT_AUTHORITY_SEED: &[u8] = b"pow_mint_auth";
+
+// =============================================================================
+// POOL PARAMETERS
+// =============================================================================
+
+/// Pool normale (ouverte à tous, pas d'attestation)
+pub const POOL_NORMAL: u8 = 0;
+
+/// Pool Seeker (requiert attestation TEE device)
+pub const POOL_SEEKER: u8 = 1;
+
+/// Durée de validité d'une attestation device (en secondes)
+pub const ATTESTATION_VALIDITY_SECS: i64 = 60;

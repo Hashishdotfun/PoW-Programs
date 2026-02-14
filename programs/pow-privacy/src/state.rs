@@ -11,9 +11,6 @@ pub struct PrivacyConfig {
     /// Token mint (HASH token)
     pub mint: Pubkey,
 
-    /// Relayer pubkey (authorized to submit blocks)
-    pub relayer: Pubkey,
-
     /// Next claim ID (auto-increment)
     pub next_claim_id: u64,
 
@@ -46,7 +43,6 @@ impl PrivacyConfig {
     pub const LEN: usize = 8 +  // discriminator
         32 +    // authority
         32 +    // mint
-        32 +    // relayer
         8 +     // next_claim_id
         8 +     // total_claims
         8 +     // total_claims_processed
@@ -248,7 +244,6 @@ impl ClaimRequestBuffer {
 /// Update privacy config arguments
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct PrivacyConfigArgs {
-    pub relayer: Option<Pubkey>,
     pub is_active: Option<bool>,
 }
 
@@ -368,7 +363,7 @@ impl WithdrawBuffer {
 /// Stores encrypted protocol fee and current state for Arcium MPC
 #[account]
 pub struct MineBlockBuffer {
-    /// Owner who created this buffer (relayer)
+    /// Owner who created this buffer (submitter)
     pub owner: Pubkey,
 
     /// Encrypted protocol fee amount (1 x 32 bytes)
@@ -427,7 +422,6 @@ impl MineBlockBuffer {
 pub struct PrivacyProtocolInitialized {
     pub config: Pubkey,
     pub authority: Pubkey,
-    pub relayer: Pubkey,
     pub mint: Pubkey,
 }
 
@@ -465,7 +459,6 @@ pub struct FeeDeposited {
 
 #[event]
 pub struct ConfigUpdated {
-    pub relayer: Option<Pubkey>,
     pub is_active: Option<bool>,
 }
 

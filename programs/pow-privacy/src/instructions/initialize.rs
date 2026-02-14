@@ -10,7 +10,6 @@ pub fn handler(ctx: Context<Initialize>) -> Result<()> {
     let config = &mut ctx.accounts.privacy_config;
     config.authority = ctx.accounts.authority.key();
     config.mint = ctx.accounts.mint.key();
-    config.relayer = ctx.accounts.relayer.key();
     config.next_claim_id = 0;
     config.total_claims = 0;
     config.total_claims_processed = 0;
@@ -35,7 +34,6 @@ pub fn handler(ctx: Context<Initialize>) -> Result<()> {
     emit!(PrivacyProtocolInitialized {
         config: config.key(),
         authority: config.authority,
-        relayer: config.relayer,
         mint: config.mint,
     });
 
@@ -46,10 +44,6 @@ pub fn handler(ctx: Context<Initialize>) -> Result<()> {
 pub struct Initialize<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
-
-    /// The designated relayer
-    /// CHECK: Any pubkey can be a relayer
-    pub relayer: UncheckedAccount<'info>,
 
     /// Token mint (HASH token)
     pub mint: InterfaceAccount<'info, Mint>,

@@ -244,7 +244,7 @@ pub struct DistributeFees<'info> {
     /// Configuration du protocole
     #[account(
         mut,
-        seeds = [POW_CONFIG_SEED],
+        seeds = [POW_CONFIG_SEED, &[POOL_NORMAL]],
         bump = pow_config.bump,
     )]
     pub pow_config: Account<'info, PowConfig>,
@@ -295,7 +295,7 @@ pub struct ExecuteBuyback<'info> {
 
     #[account(
         mut,
-        seeds = [POW_CONFIG_SEED],
+        seeds = [POW_CONFIG_SEED, &[POOL_NORMAL]],
         bump = pow_config.bump,
     )]
     pub pow_config: Account<'info, PowConfig>,

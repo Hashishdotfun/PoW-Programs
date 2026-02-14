@@ -17,6 +17,12 @@ pub const MINE_BLOCK_BUFFER_SEED: &[u8] = b"mine_block_buffer";
 pub const HOOK_EXTRA_ACCOUNT_METAS_SEED: &[u8] = b"extra-account-metas";
 pub const HOOK_FEE_VAULT_SEED: &[u8] = b"fee_vault";
 pub const POW_CONFIG_SEED: &[u8] = b"pow_config";
+pub const MINT_AUTHORITY_SEED: &[u8] = b"pow_mint_auth";
+pub const DEVICE_ATTEST_SEED: &[u8] = b"device_attest";
+
+/// Pool IDs (privacy uses normal pool only)
+pub const POOL_NORMAL: u8 = 0;
+pub const POOL_SEEKER: u8 = 1;
 
 /// Arcium MPC configuration
 /// These will be updated when Arcium SDK is integrated

@@ -97,7 +97,7 @@ pub struct ClaimTeamFees<'info> {
 
     /// Configuration du protocole (pour vérifier l'autorité)
     #[account(
-        seeds = [POW_CONFIG_SEED],
+        seeds = [POW_CONFIG_SEED, &[POOL_NORMAL]],
         bump = pow_config.bump,
         has_one = authority @ PowError::Unauthorized,
     )]
@@ -123,7 +123,7 @@ pub struct ClaimTeamFees<'info> {
 pub struct GetTeamVaultStats<'info> {
     /// Configuration du protocole
     #[account(
-        seeds = [POW_CONFIG_SEED],
+        seeds = [POW_CONFIG_SEED, &[POOL_NORMAL]],
         bump = pow_config.bump,
     )]
     pub pow_config: Account<'info, PowConfig>,

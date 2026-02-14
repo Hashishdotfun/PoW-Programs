@@ -8,16 +8,11 @@ use crate::state::*;
 pub fn handler(ctx: Context<UpdatePrivacyConfig>, args: PrivacyConfigArgs) -> Result<()> {
     let config = &mut ctx.accounts.privacy_config;
 
-    if let Some(relayer) = args.relayer {
-        config.relayer = relayer;
-    }
-
     if let Some(is_active) = args.is_active {
         config.is_active = is_active;
     }
 
     emit!(ConfigUpdated {
-        relayer: args.relayer,
         is_active: args.is_active,
     });
 

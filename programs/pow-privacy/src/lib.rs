@@ -13,7 +13,7 @@ use instructions::*;
 use state::PrivacyConfigArgs;
 pub use errors::ErrorCode;
 
-declare_id!("6Eu1vnF4qYvKLCuXWmqYHGMnyFTXcq4RZpd6rosvPxM4");
+declare_id!("9iC7Ez6VcqG9TvPEZ31szdnhUrsCYBvmj2u9YeDBWErT");
 
 /// Helper function to convert [u64; 4] to [u8; 32]
 pub fn u64_array_to_bytes(arr: &[u64; 4]) -> [u8; 32] {

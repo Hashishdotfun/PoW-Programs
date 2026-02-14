@@ -18,7 +18,7 @@ pub mod instructions;
 
 use instructions::*;
 
-declare_id!("HSYvaaYBng6Tb1CcLg3gWw8HNPwvSTkThH1cJpMt9LCc");
+declare_id!("Ai9XrxSUmDLNCXkoeoqnYuzPgN9F2PeF9WtLq9GyqER");
 
 #[program]
 pub mod pow_protocol {
@@ -42,8 +42,8 @@ pub mod pow_protocol {
     /// - `pow_config`: PDA de configuration (créé)
     /// - `pow_vault`: PDA pour les tokens de reward (créé)
     /// - `team_vault`: PDA pour les fees team (créé)
-    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-        instructions::initialize::handler(ctx)
+    pub fn initialize(ctx: Context<Initialize>, pool_id: u8) -> Result<()> {
+        instructions::initialize::handler(ctx, pool_id)
     }
 
     // =========================================================================
@@ -73,6 +73,19 @@ pub mod pow_protocol {
     /// - `fee_collector`: PDA qui collecte les fees
     pub fn submit_proof(ctx: Context<SubmitProof>, nonce: u128) -> Result<()> {
         instructions::submit_proof::handler(ctx, nonce)
+    }
+
+    // =========================================================================
+    // ATTESTATION DEVICE
+    // =========================================================================
+
+    /// Crée ou rafraîchit une attestation device
+    ///
+    /// Le backend vérifie le hardware TEE du Seeker, puis co-signe cette
+    /// transaction. L'attestation est valide 60 secondes on-chain.
+    /// Le miner paie le rent (première fois) et les tx fees.
+    pub fn create_attestation(ctx: Context<CreateAttestation>) -> Result<()> {
+        instructions::create_attestation::handler(ctx)
     }
 
     // =========================================================================
@@ -222,26 +235,26 @@ mod tests {
 
     #[test]
     fn test_reward_calculation() {
-        // Test reward pendant le boost (1ère année)
+        // Test reward pendant le boost (1ère année) - halved for dual pool
         let reward_boost = R0_BOOST;
-        assert_eq!(reward_boost, 88_700_000); // 0.0887 tokens
+        assert_eq!(reward_boost, 44_350_000); // 0.04435 tokens (half of 0.0887)
 
-        // Test reward normal
+        // Test reward normal - halved for dual pool
         let reward_normal = R0_NORMAL;
-        assert_eq!(reward_normal, 57_400_000); // 0.0574 tokens
+        assert_eq!(reward_normal, 28_700_000); // 0.0287 tokens (half of 0.0574)
     }
 
     #[test]
     fn test_fee_calculation() {
-        // Test fee initiale
-        assert_eq!(FEE_INITIAL_SOL, 5_000_000); // 0.005 SOL
+        // Test fee initiale (0.001 SOL)
+        assert_eq!(FEE_INITIAL_SOL, 1_000_000); // 0.001 SOL
 
         // Test fee après 2 ans (1.5x)
         let fee_2y = FEE_INITIAL_SOL * FEE_MULTIPLIER_NUMERATOR / FEE_MULTIPLIER_DENOMINATOR;
-        assert_eq!(fee_2y, 7_500_000); // 0.0075 SOL
+        assert_eq!(fee_2y, 1_500_000); // 0.0015 SOL
 
         // Test fee cap
-        assert_eq!(FEE_SOL_CAP, 50_000_000); // 0.05 SOL
+        assert_eq!(FEE_SOL_CAP, 500_000_000); // 0.5 SOL
     }
 
     #[test]

@@ -8,11 +8,15 @@
     "init-protocol": "ts-node scripts/init-protocol.ts",
     "init-privacy": "ts-node scripts/init-privacy.ts",
     "init-comp-defs": "ts-node scripts/init-comp-defs.ts",
-    "init-all": "ts-node scripts/init-protocol.ts && ts-node scripts/init-privacy.ts && ts-node scripts/init-comp-defs.ts"
+    "init-all": "ts-node scripts/init-protocol.ts && ts-node scripts/init-privacy.ts && ts-node scripts/init-comp-defs.ts",
+    "set-attestation-authority": "ts-node scripts/set-attestation-authority.ts",
+    "create-pool": "ts-node scripts/create-orca-pool.ts"
   },
   "dependencies": {
     "@arcium-hq/client": "^0.7.0",
     "@coral-xyz/anchor": "^0.30.1",
+    "@orca-so/whirlpools": "^6.0.0",
+    "@solana/kit": "^5.5.1",
     "@solana/spl-token": "^0.4.6",
     "@solana/spl-token-metadata": "^0.1.4",
     "@solana/web3.js": "^1.95.3"

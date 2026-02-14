@@ -111,8 +111,12 @@ pub struct PowConfig {
     /// Number of timestamps stored (0-10, used during initial fill)
     pub block_timestamps_count: u8,
 
-    /// Padding pour alignement et futures extensions
-    pub _padding: [u8; 30],
+    /// Backend pubkey autorisée à créer des attestations device
+    /// Si Pubkey::default() (all zeros), attestation is disabled
+    pub attestation_authority: Pubkey,
+
+    /// Pool ID: 0 = normal (open), 1 = seeker (requires TEE attestation)
+    pub pool_id: u8,
 }
 
 /// Number of blocks to use for difficulty moving average
@@ -144,7 +148,8 @@ impl PowConfig {
         (8 * 10) +  // block_timestamps (10 x i64)
         1 +     // block_timestamps_index
         1 +     // block_timestamps_count
-        30;     // padding
+        32 +    // attestation_authority
+        1;      // pool_id
 }
 
 // =============================================================================
@@ -172,9 +177,12 @@ pub struct MinerStats {
     
     /// Timestamp du dernier bloc miné
     pub last_block_ts: i64,
-    
+
     /// Bump du PDA
     pub bump: u8,
+
+    /// Pool ID (0 = normal, 1 = seeker)
+    pub pool_id: u8,
 }
 
 impl MinerStats {
@@ -185,7 +193,8 @@ impl MinerStats {
         8 +     // total_fees_paid
         8 +     // first_block_ts
         8 +     // last_block_ts
-        1;      // bump
+        1 +     // bump
+        1;      // pool_id
 }
 
 // =============================================================================
@@ -292,6 +301,56 @@ pub struct HalvingInfo {
     
     /// Reward après prochain halving
     pub next_reward: u64,
+}
+
+// =============================================================================
+// PROTOCOL STATS - Stats globales pour dashboard
+// =============================================================================
+
+// =============================================================================
+// DEVICE ATTESTATION - Attestation hardware par le backend
+// =============================================================================
+
+/// Attestation de device créée par le backend après vérification TEE.
+/// Valide pendant 60 secondes on-chain.
+/// Consommée après chaque submit_proof (is_used = true).
+/// Le mineur doit re-attester avant de soumettre un nouveau bloc.
+#[account]
+pub struct DeviceAttestation {
+    /// Adresse du mineur attesté
+    pub miner: Pubkey,
+    /// Authority backend qui a signé l'attestation
+    pub authority: Pubkey,
+    /// Unix timestamp de création/refresh
+    pub timestamp: i64,
+    /// Bump du PDA
+    pub bump: u8,
+    /// Whether this attestation has been consumed by a submit_proof
+    pub is_used: bool,
+}
+
+impl DeviceAttestation {
+    pub const LEN: usize = 8 +  // discriminator
+        32 +    // miner
+        32 +    // authority
+        8 +     // timestamp
+        1 +     // bump
+        1;      // is_used
+}
+
+// =============================================================================
+// MINT AUTHORITY - Shared authority for minting across both pools
+// =============================================================================
+
+/// Shared mint authority PDA. Both pools use this to sign mint_to CPI calls.
+/// PDA seeds: [b"pow_mint_auth"]
+#[account]
+pub struct MintAuthority {
+    pub bump: u8,
+}
+
+impl MintAuthority {
+    pub const LEN: usize = 8 + 1; // discriminator + bump
 }
 
 // =============================================================================
