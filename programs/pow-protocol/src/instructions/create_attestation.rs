@@ -32,6 +32,7 @@ pub fn handler(ctx: Context<CreateAttestation>) -> Result<()> {
     let attestation = &mut ctx.accounts.attestation;
     attestation.miner = ctx.accounts.miner.key();
     attestation.authority = ctx.accounts.authority.key();
+    attestation.rent_recipient = ctx.accounts.rent_recipient.key();
     attestation.timestamp = clock.unix_timestamp;
     attestation.bump = ctx.bumps.attestation;
     attestation.is_used = false; // Fresh attestation, ready to be consumed by submit_proof
@@ -74,6 +75,10 @@ pub struct CreateAttestation<'info> {
         bump,
     )]
     pub attestation: Account<'info, DeviceAttestation>,
+
+    /// Destination qui recevra le rent quand l'attestation sera consommée/fermée
+    /// CHECK: clé stockée on-chain et revalidée au submit
+    pub rent_recipient: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
 }

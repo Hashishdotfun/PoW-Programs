@@ -48,9 +48,18 @@ pub fn handler(ctx: Context<SubmitProof>, nonce: u128) -> Result<()> {
             attestation.authority == ctx.accounts.pow_config.attestation_authority,
             PowError::InvalidAttestationAuthority
         );
+        require!(
+            attestation.rent_recipient == ctx.accounts.attestation_rent_recipient.key(),
+            PowError::InvalidAttestationRentRecipient
+        );
         // Consume the attestation — miner must re-attest before next block
         attestation.is_used = true;
         msg!("Device attestation consumed (age: {}s)", now - attestation.timestamp);
+        attestation.close(ctx.accounts.attestation_rent_recipient.to_account_info())?;
+        msg!(
+            "Device attestation closed, rent sent to {}",
+            ctx.accounts.attestation_rent_recipient.key()
+        );
     }
 
     let config = &mut ctx.accounts.pow_config;
@@ -487,6 +496,11 @@ pub struct SubmitProof<'info> {
         bump,
     )]
     pub attestation: Option<Account<'info, DeviceAttestation>>,
+
+    /// Destination qui reçoit le rent lors de la fermeture de l'attestation consommée
+    /// CHECK: validé contre `attestation.rent_recipient`
+    #[account(mut)]
+    pub attestation_rent_recipient: UncheckedAccount<'info>,
 
     /// Programme Token
     pub token_program: Interface<'info, TokenInterface>,

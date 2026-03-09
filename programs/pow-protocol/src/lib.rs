@@ -84,6 +84,7 @@ pub mod pow_protocol {
     /// Le backend vérifie le hardware TEE du Seeker, puis co-signe cette
     /// transaction. L'attestation est valide 60 secondes on-chain.
     /// Le miner paie le rent (première fois) et les tx fees.
+    /// Quand l'attestation est consommée, son rent est renvoyé au `rent_recipient`.
     pub fn create_attestation(ctx: Context<CreateAttestation>) -> Result<()> {
         instructions::create_attestation::handler(ctx)
     }

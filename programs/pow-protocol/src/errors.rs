@@ -154,6 +154,9 @@ pub enum PowError {
     #[msg("Attestation already used, re-attest before submitting another proof")]
     AttestationAlreadyUsed,
 
+    #[msg("Invalid attestation rent recipient")]
+    InvalidAttestationRentRecipient,
+
     // =============================================================================
     // ERREURS DE POOL
     // =============================================================================

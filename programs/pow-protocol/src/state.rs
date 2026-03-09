@@ -321,6 +321,8 @@ pub struct DeviceAttestation {
     pub miner: Pubkey,
     /// Authority backend qui a signé l'attestation
     pub authority: Pubkey,
+    /// Destination qui reçoit le rent quand l'attestation est fermée
+    pub rent_recipient: Pubkey,
     /// Unix timestamp de création/refresh
     pub timestamp: i64,
     /// Bump du PDA
@@ -333,6 +335,7 @@ impl DeviceAttestation {
     pub const LEN: usize = 8 +  // discriminator
         32 +    // miner
         32 +    // authority
+    32 +    // rent_recipient
         8 +     // timestamp
         1 +     // bump
         1;      // is_used
