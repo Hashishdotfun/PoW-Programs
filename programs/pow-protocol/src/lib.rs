@@ -89,6 +89,12 @@ pub mod pow_protocol {
         instructions::create_attestation::handler(ctx)
     }
 
+    /// Ferme une attestation device à la fin d'une session de mining.
+    /// Le rent de l'attestation est envoyé au `rent_recipient` enregistré.
+    pub fn close_attestation(ctx: Context<CloseAttestation>) -> Result<()> {
+        instructions::close_attestation::handler(ctx)
+    }
+
     // =========================================================================
     // DISTRIBUTION DES FEES
     // =========================================================================

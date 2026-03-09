@@ -5,6 +5,7 @@
 pub mod initialize;
 pub mod submit_proof;
 pub mod create_attestation;
+pub mod close_attestation;
 pub mod distribute_fees;
 pub mod update_config;
 pub mod claim_team_fees;
@@ -16,6 +17,7 @@ pub mod claim_team_fees;
 pub use initialize::*;
 pub use submit_proof::*;
 pub use create_attestation::*;
+pub use close_attestation::*;
 pub use distribute_fees::*;
 pub use update_config::*;
 pub use claim_team_fees::*;
