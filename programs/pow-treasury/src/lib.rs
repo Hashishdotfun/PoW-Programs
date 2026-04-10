@@ -15,6 +15,20 @@
 
 use anchor_lang::prelude::*;
 
+#[cfg(not(feature = "no-entrypoint"))]
+use solana_security_txt::security_txt;
+
+#[cfg(not(feature = "no-entrypoint"))]
+security_txt! {
+    name: "Hashish PoW Treasury",
+    project_url: "https://hashish.fun",
+    contacts: "email:admin@hashish.fun",
+    policy: "https://github.com/Hashishdotfun/PoW-Programs/blob/main/SECURITY.md",
+    preferred_languages: "en,fr",
+    source_code: "https://github.com/Hashishdotfun/PoW-Programs",
+    auditors: "N/A"
+}
+
 pub mod constants;
 pub mod errors;
 pub mod state;
