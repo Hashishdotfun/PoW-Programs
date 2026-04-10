@@ -101,7 +101,7 @@ pub struct ClaimTeamFees<'info> {
         bump = pow_config.bump,
         has_one = authority @ PowError::Unauthorized,
     )]
-    pub pow_config: Account<'info, PowConfig>,
+    pub pow_config: Box<Account<'info, PowConfig>>,
 
     /// Vault de la team
     #[account(
@@ -126,7 +126,7 @@ pub struct GetTeamVaultStats<'info> {
         seeds = [POW_CONFIG_SEED, &[POOL_NORMAL]],
         bump = pow_config.bump,
     )]
-    pub pow_config: Account<'info, PowConfig>,
+    pub pow_config: Box<Account<'info, PowConfig>>,
 
     /// Vault de la team
     #[account(

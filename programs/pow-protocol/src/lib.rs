@@ -18,7 +18,7 @@ pub mod instructions;
 
 use instructions::*;
 
-declare_id!("Ai9XrxSUmDLNCXkoeoqnYuzPgN9F2PeF9WtLq9GyqER");
+declare_id!("PoWQ79wY7LXrKaU8vZBoFb4JgSytENSdpAQAPJaZiSh");
 
 #[program]
 pub mod pow_protocol {
@@ -96,57 +96,6 @@ pub mod pow_protocol {
     }
 
     // =========================================================================
-    // DISTRIBUTION DES FEES
-    // =========================================================================
-
-    /// Distribue les fees SOL accumulées
-    /// 
-    /// Permissionless - n'importe qui peut appeler cette instruction.
-    /// Distribue selon le modèle:
-    /// - 5% → Team vault
-    /// - 57% → Buyback (60% * 95%)
-    /// - 38% → LP direct (40% * 95%)
-    /// 
-    /// # Accounts
-    /// - `fee_collector`: PDA avec les fees accumulées
-    /// - `team_vault`: Reçoit 5%
-    /// - `buyback_vault`: Reçoit 57% (pour swap SOL→Token)
-    /// - `lp_vault`: Reçoit 38% (pour add liquidity)
-    pub fn distribute_fees(ctx: Context<DistributeFees>) -> Result<()> {
-        instructions::distribute_fees::handler(ctx)
-    }
-
-    // ==========================================================================
-    // BUYBACK - Traitement des tokens achetés
-    // ==========================================================================
-
-    /// Traite les tokens achetés via buyback off-chain
-    ///
-    /// Le swap SOL → Token est fait off-chain via script TypeScript.
-    /// Cette instruction traite les tokens reçus:
-    /// - 50% sont brûlés
-    /// - 50% restent pour LP
-    ///
-    /// Permissionless - n'importe qui peut appeler.
-    pub fn execute_buyback(ctx: Context<ExecuteBuyback>) -> Result<()> {
-        instructions::distribute_fees::execute_buyback(ctx)
-    }
-
-    /// Retire le SOL du buyback_vault vers le keeper pour le swap off-chain
-    ///
-    /// Permissionless - le keeper fait le swap puis appelle execute_buyback
-    pub fn withdraw_for_buyback(ctx: Context<WithdrawForBuyback>) -> Result<()> {
-        instructions::distribute_fees::withdraw_for_buyback(ctx)
-    }
-
-    /// Retire le SOL du lp_vault vers le keeper pour ajouter de la liquidité
-    ///
-    /// Permissionless - le keeper ajoute la liquidité puis burn les LP tokens
-    pub fn withdraw_for_lp(ctx: Context<WithdrawForLp>) -> Result<()> {
-        instructions::distribute_fees::withdraw_for_lp(ctx)
-    }
-
-    // =========================================================================
     // ADMINISTRATION
     // =========================================================================
 
@@ -178,30 +127,52 @@ pub mod pow_protocol {
         instructions::claim_team_fees::handler(ctx, amount)
     }
 
-    // =========================================================================
-    // INTÉGRATION TRANSFER HOOK (SPL2022)
-    // =========================================================================
-
-    /// Ajoute des tokens au pool de pending reward
-    /// 
-    /// Appelé par le programme transfer hook quand la taxe est collectée.
-    /// 50% de la taxe va ici (les autres 50% sont brûlés par le hook).
-    /// 
-    /// # Arguments
-    /// - `amount`: Montant de tokens à ajouter
-    pub fn add_pending_reward(ctx: Context<AddPendingReward>, amount: u64) -> Result<()> {
-        instructions::update_config::add_pending_reward(ctx, amount)
+    /// Enregistre les tokens brûlés via le treasury buyback
+    ///
+    /// Diminue total_supply_mined pour libérer du cap supply.
+    /// Callable par le programme pow-treasury uniquement.
+    pub fn record_treasury_burn(ctx: Context<RecordTreasuryBurn>, amount: u64) -> Result<()> {
+        instructions::update_config::record_treasury_burn(ctx, amount)
     }
 
-    /// Enregistre les tokens brûlés via la taxe transfert
-    /// 
-    /// Pour le tracking et les stats.
-    /// 
-    /// # Arguments
-    /// - `amount`: Montant brûlé
-    pub fn record_transfer_burn(ctx: Context<RecordTransferBurn>, amount: u64) -> Result<()> {
-        instructions::update_config::record_transfer_burn(ctx, amount)
+    // =========================================================================
+    // FEE DISTRIBUTION
+    // =========================================================================
+
+    /// Distribue les fees SOL du fee_collector
+    ///
+    /// Permissionless. 5% team, 95% direct vers treasury_sol_vault.
+    pub fn distribute_fees(ctx: Context<DistributeFees>) -> Result<()> {
+        instructions::distribute_fees::handler(ctx)
     }
+
+    // =========================================================================
+    // TRANSFER FEE COLLECTION (replaces transfer-hook)
+    // =========================================================================
+
+    /// Initialize the fee token vault for SPL2022 transfer fee collection.
+    ///
+    /// Authority only. Called once after deployment.
+    /// After calling this, set the mint's withdrawWithheldAuthority
+    /// to the fee_authority PDA using spl-token authorize.
+    pub fn initialize_fee_vault(ctx: Context<InitializeFeeVault>) -> Result<()> {
+        instructions::initialize_fee_vault::handler(ctx)
+    }
+
+    /// Collect and distribute SPL2022 transfer fees.
+    ///
+    /// Permissionless with cranker incentive (1% minted as HASHISH).
+    /// 1. Harvest withheld fees from token accounts (remaining_accounts)
+    /// 2. Withdraw fees from mint to fee_token_vault
+    /// 3. Burn 50% (permanent deflation, frees supply cap)
+    /// 4. Add 50% to pending miner rewards
+    /// 5. Mint cranker reward
+    pub fn collect_transfer_fees<'info>(
+        ctx: Context<'_, '_, '_, 'info, CollectTransferFees<'info>>,
+    ) -> Result<()> {
+        instructions::collect_transfer_fees::handler(ctx)
+    }
+
 }
 
 // =============================================================================
@@ -264,16 +235,4 @@ mod tests {
         assert_eq!(FEE_SOL_CAP, 500_000_000); // 0.5 SOL
     }
 
-    #[test]
-    fn test_difficulty_adjustment() {
-        let initial_diff: u128 = 1_000_000;
-        
-        // Test augmentation (bloc trop rapide)
-        let fast_diff = initial_diff * DIFF_UP_FACTOR_NUMERATOR / DIFF_UP_FACTOR_DENOMINATOR;
-        assert_eq!(fast_diff, 1_020_000); // +2%
-
-        // Test diminution (bloc trop lent)
-        let slow_diff = initial_diff * DIFF_DOWN_FACTOR_NUMERATOR / DIFF_DOWN_FACTOR_DENOMINATOR;
-        assert_eq!(slow_diff, 980_000); // -2%
-    }
 }

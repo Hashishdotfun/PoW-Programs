@@ -1,8 +1,6 @@
 // =============================================================================
 // CONSTANTES DU PROTOCOLE POW
 // =============================================================================
-// Basé sur les paramètres du document 2
-
 
 // =============================================================================
 // TOKEN PARAMETERS
@@ -17,9 +15,6 @@ pub const DECIMALS: u8 = 9;
 /// Multiplicateur pour les décimales (10^9)
 pub const DECIMALS_MULTIPLIER: u64 = 1_000_000_000;
 
-/// Premint tokens pour LP initiale (1000 tokens)
-pub const PREMINT_TOKENS: u64 = 1_000 * DECIMALS_MULTIPLIER;
-
 // =============================================================================
 // TIMING PARAMETERS
 // =============================================================================
@@ -30,24 +25,16 @@ pub const TARGET_BLOCK_TIME: i64 = 60;
 /// Secondes par an (approximatif)
 pub const SECONDS_PER_YEAR: i64 = 365 * 24 * 60 * 60; // 31,536,000
 
-/// Blocs par an (avec block time de 60s)
-pub const BLOCKS_PER_YEAR: u64 = 525_600;
-
-/// Blocs pour 2 ans
-pub const BLOCKS_PER_2_YEARS: u64 = 1_051_200;
-
 // =============================================================================
 // REWARD PARAMETERS (Émission exponentielle décroissante)
 // =============================================================================
 
 /// Reward initial normal (après 1ère année) - ~0.0287 tokens par bloc
 /// Divisé par 2 car 2 pools = 2x blocs produits
-/// En base 10^9: 28_700_000
 pub const R0_NORMAL: u64 = 28_700_000;
 
 /// Reward initial boosté (1ère année, x1.5) - ~0.0444 tokens par bloc
 /// Divisé par 2 car 2 pools = 2x blocs produits
-/// En base 10^9: 44_350_000
 pub const R0_BOOST: u64 = 44_350_000;
 
 /// Facteur de décroissance k (en millionièmes pour précision)
@@ -66,7 +53,6 @@ pub const BOOST_DURATION: i64 = SECONDS_PER_YEAR;
 pub const FEE_INITIAL_SOL: u64 = 1_000_000; // 0.001 SOL = 1,000,000 lamports
 
 /// Multiplicateur tous les 2 ans: 1.5x
-/// Stocké comme 150 / 100 pour éviter les floats
 pub const FEE_MULTIPLIER_NUMERATOR: u64 = 150;
 pub const FEE_MULTIPLIER_DENOMINATOR: u64 = 100;
 
@@ -80,91 +66,18 @@ pub const FEE_SOL_CAP: u64 = 500_000_000; // 0.5 SOL = 500,000,000 lamports
 /// Team fee: 5%
 pub const TEAM_FEE_PCT: u64 = 5;
 
-/// Protocol fee: 95% (LP + buyback)
-pub const PROTO_FEE_PCT: u64 = 95;
-
-/// Buyback: 60% du protocol fee
-pub const BUYBACK_SOL_PCT: u64 = 60;
-
-/// LP: 40% du protocol fee
-pub const LP_SOL_PCT: u64 = 40;
-
-/// Burn from buyback: 50%
-pub const BURN_FROM_BUYBACK_PCT: u64 = 50;
-
-/// LP from buyback: 50%
-pub const LP_FROM_BUYBACK_PCT: u64 = 50;
-
-// =============================================================================
-// TRANSFER TAX (SPL2022)
-// =============================================================================
-
-/// Taxe de transfert: 0.01% = 1 basis point
-pub const TRANSFER_TAX_BASIS_POINTS: u16 = 1;
-
-/// % de la taxe qui est burn: 50%
-pub const TRANSFER_BURN_PCT: u64 = 50;
-
-/// % de la taxe pour les mineurs: 50%
-pub const TRANSFER_MINER_PCT: u64 = 50;
-
 // =============================================================================
 // DIFFICULTY PARAMETERS
 // =============================================================================
 
-/// Difficulté initiale (ajuster selon le hashrate attendu)
-/// Plus c'est grand, plus c'est difficile
-/// Temporairement facile pour les tests locaux
-pub const INITIAL_DIFFICULTY: u128 = 10_000;
+/// Difficulté initiale: 1M
+pub const INITIAL_DIFFICULTY: u128 = 1_000_000;
 
 /// Difficulté minimum (empêche de tomber à 0)
 pub const MIN_DIFFICULTY: u128 = 1_000;
 
 /// Difficulté maximum (empêche overflow)
 pub const MAX_DIFFICULTY: u128 = u128::MAX / 1000;
-
-// =============================================================================
-// AJUSTEMENT PROPORTIONNEL DE DIFFICULTÉ
-// =============================================================================
-// L'ajustement est maintenant proportionnel au ratio temps_réel/temps_cible:
-//
-// ratio < 0.5   → Bloc très rapide (< 30s)  → ×2.0 (doubler)
-// ratio < 0.75  → Bloc rapide (30-45s)      → ×1.5 (+50%)
-// ratio < 0.9   → Bloc légèrement rapide    → ×1.1 (+10%)
-// 0.9 ≤ ratio ≤ 1.1 → Dans la cible (54-66s) → ×1.0 (aucun changement)
-// ratio ≤ 1.5   → Bloc légèrement lent      → ×0.9 (-10%)
-// ratio ≤ 2.0   → Bloc lent (90-120s)       → ×0.7 (-30%)
-// ratio > 2.0   → Bloc très lent (> 120s)   → ×0.5 (diviser par 2)
-//
-// Avantages:
-// - Convergence 81% plus rapide (38 blocs vs 580 blocs pour 10k GPUs)
-// - Réaction adaptative aux changements de hashrate
-// - Zone de stabilité (±10% = pas de changement)
-// =============================================================================
-
-// Les anciennes constantes sont conservées pour compatibilité avec les tests
-#[allow(dead_code)]
-pub const DIFF_UP_FACTOR_NUMERATOR: u128 = 102;
-#[allow(dead_code)]
-pub const DIFF_UP_FACTOR_DENOMINATOR: u128 = 100;
-#[allow(dead_code)]
-pub const DIFF_DOWN_FACTOR_NUMERATOR: u128 = 98;
-#[allow(dead_code)]
-pub const DIFF_DOWN_FACTOR_DENOMINATOR: u128 = 100;
-#[allow(dead_code)]
-pub const SLOW_BLOCK_THRESHOLD_MULTIPLIER: i64 = 3;
-#[allow(dead_code)]
-pub const SLOW_BLOCK_THRESHOLD_DIVISOR: i64 = 2;
-
-// =============================================================================
-// LP PARAMETERS
-// =============================================================================
-
-/// LP initiale SOL: 0.1 SOL
-pub const LP_INITIAL_SOL: u64 = 100_000_000; // 0.1 SOL = 100,000,000 lamports
-
-/// LP initiale tokens: 1000 tokens (= tout le premint)
-pub const LP_INITIAL_TOKENS: u64 = PREMINT_TOKENS;
 
 // =============================================================================
 // SEEDS FOR PDAs
@@ -174,7 +87,6 @@ pub const POW_CONFIG_SEED: &[u8] = b"pow_config";
 pub const POW_VAULT_SEED: &[u8] = b"pow_vault";
 pub const FEE_VAULT_SEED: &[u8] = b"fee_vault";
 pub const TEAM_VAULT_SEED: &[u8] = b"team_vault";
-pub const LP_VAULT_SEED: &[u8] = b"lp_vault";
 pub const MINER_STATS_SEED: &[u8] = b"miner_stats";
 pub const DEVICE_ATTEST_SEED: &[u8] = b"device_attest";
 pub const MINT_AUTHORITY_SEED: &[u8] = b"pow_mint_auth";
@@ -191,3 +103,23 @@ pub const POOL_SEEKER: u8 = 1;
 
 /// Durée de validité d'une attestation device (en secondes)
 pub const ATTESTATION_VALIDITY_SECS: i64 = 60;
+
+// =============================================================================
+// TREASURY CYCLE PARAMETERS
+// =============================================================================
+
+/// Nombre de blocs par cycle treasury (buyback ou LP)
+pub const BLOCKS_PER_CYCLE: u64 = 10;
+
+/// Seed pour le cycle gate PDA
+pub const CYCLE_GATE_SEED: &[u8] = b"cycle_gate";
+
+/// Seed du treasury SOL vault PDA (dans pow-treasury)
+pub const TREASURY_SOL_VAULT_SEED: &[u8] = b"treasury_sol_vault";
+
+/// Programme pow-treasury ID (typed constant, no runtime string parsing)
+pub const TREASURY_PROGRAM_ID: anchor_lang::prelude::Pubkey = anchor_lang::prelude::Pubkey::new_from_array([
+    4, 247, 26, 137, 96, 251, 198, 158, 253, 26, 229, 138, 160, 93, 84, 8,
+    185, 145, 112, 53, 116, 14, 130, 17, 2, 87, 220, 150, 193, 192, 166, 184,
+]);
+

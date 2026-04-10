@@ -11,7 +11,6 @@ use anchor_lang::prelude::*;
 /// Configuration principale du protocole PoW
 /// Stocke tous les paramètres et l'état global
 #[account]
-#[derive(Default)]
 pub struct PowConfig {
     /// Autorité du protocole (peut mettre à jour les paramètres)
     pub authority: Pubkey,
@@ -103,12 +102,12 @@ pub struct PowConfig {
 
     /// Circular buffer of last N block timestamps for moving average
     /// Used to smooth difficulty adjustments and reduce volatility
-    pub block_timestamps: [i64; 10],
+    pub block_timestamps: [i64; 100],
 
-    /// Current index in the circular buffer (0-9)
+    /// Current index in the circular buffer (0-99)
     pub block_timestamps_index: u8,
 
-    /// Number of timestamps stored (0-10, used during initial fill)
+    /// Number of timestamps stored (0-100, used during initial fill)
     pub block_timestamps_count: u8,
 
     /// Backend pubkey autorisée à créer des attestations device
@@ -119,8 +118,40 @@ pub struct PowConfig {
     pub pool_id: u8,
 }
 
+impl Default for PowConfig {
+    fn default() -> Self {
+        Self {
+            authority: Pubkey::default(),
+            mint: Pubkey::default(),
+            difficulty: 0,
+            last_block_ts: 0,
+            blocks_mined: 0,
+            total_supply_mined: 0,
+            current_challenge: [0u8; 32],
+            pending_reward_tokens: 0,
+            fee_sol_current: 0,
+            total_fees_collected: 0,
+            total_team_fees: 0,
+            total_buyback_sol: 0,
+            total_lp_sol: 0,
+            total_burned_from_buyback: 0,
+            total_burned_from_transfer_tax: 0,
+            launch_ts: 0,
+            last_fee_update_ts: 0,
+            is_initialized: false,
+            is_paused: false,
+            bump: 0,
+            block_timestamps: [0i64; 100],
+            block_timestamps_index: 0,
+            block_timestamps_count: 0,
+            attestation_authority: Pubkey::default(),
+            pool_id: 0,
+        }
+    }
+}
+
 /// Number of blocks to use for difficulty moving average
-pub const DIFFICULTY_WINDOW_SIZE: usize = 10;
+pub const DIFFICULTY_WINDOW_SIZE: usize = 100;
 
 impl PowConfig {
     /// Taille du compte en bytes
@@ -145,7 +176,7 @@ impl PowConfig {
         1 +     // is_initialized
         1 +     // is_paused
         1 +     // bump
-        (8 * 10) +  // block_timestamps (10 x i64)
+        (8 * 100) +  // block_timestamps (100 x i64)
         1 +     // block_timestamps_index
         1 +     // block_timestamps_count
         32 +    // attestation_authority
@@ -354,6 +385,35 @@ pub struct MintAuthority {
 
 impl MintAuthority {
     pub const LEN: usize = 8 + 1; // discriminator + bump
+}
+
+// =============================================================================
+// CYCLE GATE - Autorise le treasury à exécuter un cycle
+// =============================================================================
+
+/// PDA mis à jour par submit_proof tous les BLOCKS_PER_CYCLE blocs.
+/// Le treasury vérifie ce PDA pour savoir s'il peut exécuter.
+/// Seeds: [b"cycle_gate"]
+#[account]
+pub struct CycleGate {
+    /// Numéro du dernier cycle autorisé (incrémenté tous les 10 blocs)
+    pub cycle_number: u64,
+    /// Bloc auquel le cycle a été autorisé
+    pub block_number: u64,
+    /// Timestamp de l'autorisation
+    pub timestamp: i64,
+    /// true si le cycle a été consommé par le treasury
+    pub is_consumed: bool,
+    pub bump: u8,
+}
+
+impl CycleGate {
+    pub const LEN: usize = 8 // discriminator
+        + 8   // cycle_number
+        + 8   // block_number
+        + 8   // timestamp
+        + 1   // is_consumed
+        + 1;  // bump
 }
 
 // =============================================================================

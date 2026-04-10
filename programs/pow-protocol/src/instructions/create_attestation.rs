@@ -64,7 +64,7 @@ pub struct CreateAttestation<'info> {
         seeds = [POW_CONFIG_SEED, &[POOL_SEEKER]],
         bump = pow_config.bump,
     )]
-    pub pow_config: Account<'info, PowConfig>,
+    pub pow_config: Box<Account<'info, PowConfig>>,
 
     /// L'attestation PDA (créée ou mise à jour)
     #[account(

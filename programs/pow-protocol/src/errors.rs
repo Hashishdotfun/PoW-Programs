@@ -163,4 +163,11 @@ pub enum PowError {
 
     #[msg("Invalid pool ID")]
     InvalidPoolId,
+
+    // =============================================================================
+    // ERREURS TREASURY
+    // =============================================================================
+
+    #[msg("Unauthorized: caller is not the treasury program")]
+    UnauthorizedTreasury,
 }

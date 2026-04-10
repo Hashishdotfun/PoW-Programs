@@ -63,7 +63,7 @@ pub fn handler(ctx: Context<Initialize>, pool_id: u8) -> Result<()> {
     config.bump = ctx.bumps.pow_config;
 
     // Difficulty moving average buffer (init with launch timestamp)
-    config.block_timestamps = [clock.unix_timestamp; 10];
+    config.block_timestamps = [clock.unix_timestamp; 100];
     config.block_timestamps_index = 0;
     config.block_timestamps_count = 1;
 
@@ -121,7 +121,7 @@ pub struct Initialize<'info> {
         seeds = [POW_CONFIG_SEED, &[pool_id]],
         bump,
     )]
-    pub pow_config: Account<'info, PowConfig>,
+    pub pow_config: Box<Account<'info, PowConfig>>,
 
     /// Shared mint authority (created on first call, reused on second)
     #[account(

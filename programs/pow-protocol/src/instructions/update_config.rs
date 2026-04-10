@@ -24,6 +24,11 @@ pub struct UpdateConfigParams {
     /// Backend pubkey autorisée à créer des attestations device
     /// Set to Some(Pubkey::default()) to disable attestation requirement
     pub attestation_authority: Option<Pubkey>,
+
+    /// Register preminted supply against the max supply cap.
+    /// Can only be set once (when total_supply_mined == 0) and only on pool 0.
+    /// The amount is added to total_supply_mined so miners can only mine MAX_SUPPLY - premint.
+    pub premint_supply: Option<u64>,
 }
 
 /// Met à jour la configuration du protocole
@@ -75,6 +80,15 @@ pub fn handler(ctx: Context<UpdateConfig>, params: UpdateConfigParams) -> Result
         config.attestation_authority = attest_auth;
     }
 
+    // Register preminted supply (one-time, pool 0 only)
+    if let Some(premint) = params.premint_supply {
+        require!(config.pool_id == POOL_NORMAL, PowError::InvalidPoolId);
+        require!(config.total_supply_mined == 0, PowError::AlreadyInitialized);
+        require!(premint > 0 && premint < MAX_SUPPLY, PowError::Overflow);
+        config.total_supply_mined = premint;
+        msg!("Premint supply registered: {} tokens against max supply cap", premint);
+    }
+
     msg!("Config updated successfully");
 
     Ok(())
@@ -105,39 +119,43 @@ pub fn transfer_authority(ctx: Context<TransferAuthority>) -> Result<()> {
     Ok(())
 }
 
-/// Met à jour le pending_reward (appelé par le transfer hook)
-/// 
-/// Cette fonction est appelée quand la taxe de transfert est collectée
-/// pour ajouter des tokens au pool de reward des mineurs
-pub fn add_pending_reward(ctx: Context<AddPendingReward>, amount: u64) -> Result<()> {
-    let config = &mut ctx.accounts.pow_config;
 
-    // Seul le programme transfer hook peut appeler cette fonction
-    // En production, vérifier que l'appelant est bien le transfer hook
+/// Enregistre les tokens brûlés via le treasury buyback et libère du cap supply.
+/// Le montant est splitté 50/50 entre pool normal et pool seeker.
+/// Callable par le treasury_config PDA du programme pow-treasury.
+pub fn record_treasury_burn(ctx: Context<RecordTreasuryBurn>, amount: u64) -> Result<()> {
+    // Verify caller is the pow-treasury treasury_config PDA
+    let (expected_treasury_config, _bump) = Pubkey::find_program_address(
+        &[b"treasury_config"],
+        &TREASURY_PROGRAM_ID,
+    );
+    require!(
+        *ctx.accounts.caller.key == expected_treasury_config,
+        PowError::Unauthorized
+    );
 
-    config.pending_reward_tokens = config.pending_reward_tokens
-        .checked_add(amount)
+    let normal_share = amount / 2;
+    let seeker_share = amount.checked_sub(normal_share).ok_or(PowError::Underflow)?;
+
+    let config_normal = &mut ctx.accounts.pow_config_normal;
+    config_normal.total_burned_from_buyback = config_normal.total_burned_from_buyback
+        .checked_add(normal_share)
         .ok_or(PowError::Overflow)?;
+    config_normal.total_supply_mined = config_normal.total_supply_mined
+        .saturating_sub(normal_share);
 
-    msg!("Added {} tokens to pending reward pool", amount);
-    msg!("Total pending: {}", config.pending_reward_tokens);
+    let config_seeker = &mut ctx.accounts.pow_config_seeker;
+    config_seeker.total_burned_from_buyback = config_seeker.total_burned_from_buyback
+        .checked_add(seeker_share)
+        .ok_or(PowError::Overflow)?;
+    config_seeker.total_supply_mined = config_seeker.total_supply_mined
+        .saturating_sub(seeker_share);
+
+    msg!("Treasury burn: {} freed from supply cap ({} normal, {} seeker)", amount, normal_share, seeker_share);
 
     Ok(())
 }
 
-/// Incrémente le compteur de tokens brûlés via la taxe transfert
-pub fn record_transfer_burn(ctx: Context<RecordTransferBurn>, amount: u64) -> Result<()> {
-    let config = &mut ctx.accounts.pow_config;
-
-    config.total_burned_from_transfer_tax = config.total_burned_from_transfer_tax
-        .checked_add(amount)
-        .ok_or(PowError::Overflow)?;
-
-    msg!("Recorded {} tokens burned from transfer tax", amount);
-    msg!("Total burned from transfer tax: {}", config.total_burned_from_transfer_tax);
-
-    Ok(())
-}
 
 // =============================================================================
 // CONTEXTES
@@ -156,7 +174,7 @@ pub struct UpdateConfig<'info> {
         bump = pow_config.bump,
         has_one = authority @ PowError::Unauthorized,
     )]
-    pub pow_config: Account<'info, PowConfig>,
+    pub pow_config: Box<Account<'info, PowConfig>>,
 }
 
 #[derive(Accounts)]
@@ -173,33 +191,28 @@ pub struct TransferAuthority<'info> {
         seeds = [POW_CONFIG_SEED, &[pow_config.pool_id]],
         bump = pow_config.bump,
     )]
-    pub pow_config: Account<'info, PowConfig>,
+    pub pow_config: Box<Account<'info, PowConfig>>,
 }
 
 #[derive(Accounts)]
-pub struct AddPendingReward<'info> {
-    /// Le programme transfer hook ou autorité
+pub struct RecordTreasuryBurn<'info> {
+    /// Must be the pow-treasury treasury_config PDA (verified in handler)
     pub caller: Signer<'info>,
 
-    /// Configuration du protocole
+    /// Configuration du pool normal (pool 0)
     #[account(
         mut,
-        seeds = [POW_CONFIG_SEED, &[pow_config.pool_id]],
-        bump = pow_config.bump,
+        seeds = [POW_CONFIG_SEED, &[POOL_NORMAL]],
+        bump = pow_config_normal.bump,
     )]
-    pub pow_config: Account<'info, PowConfig>,
-}
+    pub pow_config_normal: Box<Account<'info, PowConfig>>,
 
-#[derive(Accounts)]
-pub struct RecordTransferBurn<'info> {
-    /// Le programme transfer hook ou autorité
-    pub caller: Signer<'info>,
-
-    /// Configuration du protocole
+    /// Configuration du pool seeker (pool 1)
     #[account(
         mut,
-        seeds = [POW_CONFIG_SEED, &[pow_config.pool_id]],
-        bump = pow_config.bump,
+        seeds = [POW_CONFIG_SEED, &[POOL_SEEKER]],
+        bump = pow_config_seeker.bump,
     )]
-    pub pow_config: Account<'info, PowConfig>,
+    pub pow_config_seeker: Box<Account<'info, PowConfig>>,
 }
+

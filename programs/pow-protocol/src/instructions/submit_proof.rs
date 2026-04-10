@@ -10,7 +10,7 @@ use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 
 use crate::constants::*;
 use crate::errors::PowError;
-use crate::state::{DeviceAttestation, MintAuthority, PowConfig, MinerStats};
+use crate::state::{CycleGate, DeviceAttestation, MintAuthority, PowConfig, MinerStats};
 
 pub fn handler(ctx: Context<SubmitProof>, nonce: u128) -> Result<()> {
     let clock = Clock::get()?;
@@ -152,8 +152,8 @@ pub fn handler(ctx: Context<SubmitProof>, nonce: u128) -> Result<()> {
     let config = &mut ctx.accounts.pow_config;
     let idx = config.block_timestamps_index as usize;
     config.block_timestamps[idx] = now;
-    config.block_timestamps_index = ((idx + 1) % 10) as u8;
-    if config.block_timestamps_count < 10 {
+    config.block_timestamps_index = ((idx + 1) % 100) as u8;
+    if config.block_timestamps_count < 100 {
         config.block_timestamps_count += 1;
     }
 
@@ -165,6 +165,7 @@ pub fn handler(ctx: Context<SubmitProof>, nonce: u128) -> Result<()> {
         config.difficulty,
         &config.block_timestamps,
         config.block_timestamps_count,
+        config.block_timestamps_index,
         now,
     )?;
 
@@ -218,6 +219,54 @@ pub fn handler(ctx: Context<SubmitProof>, nonce: u128) -> Result<()> {
     msg!("Fee paid: {} lamports", fee_sol);
     msg!("New difficulty: {}", ctx.accounts.pow_config.difficulty);
     msg!("Total supply mined (this pool): {}", ctx.accounts.pow_config.total_supply_mined);
+
+    // Update CycleGate every BLOCKS_PER_CYCLE blocks to authorize treasury actions
+    if ctx.accounts.pow_config.blocks_mined % BLOCKS_PER_CYCLE == 0 {
+        let cycle_number = ctx.accounts.pow_config.blocks_mined / BLOCKS_PER_CYCLE;
+        let block_number = ctx.accounts.pow_config.blocks_mined;
+
+        // Initialize CycleGate if empty (first time)
+        let cycle_gate_info = &ctx.accounts.cycle_gate;
+        if cycle_gate_info.data_len() == 0 {
+            let space = CycleGate::LEN;
+            let lamports = Rent::get()?.minimum_balance(space);
+            let cg_bump = ctx.bumps.cycle_gate;
+            let seeds: &[&[u8]] = &[CYCLE_GATE_SEED, &[cg_bump]];
+            anchor_lang::system_program::create_account(
+                CpiContext::new_with_signer(
+                    ctx.accounts.system_program.to_account_info(),
+                    anchor_lang::system_program::CreateAccount {
+                        from: ctx.accounts.miner.to_account_info(),
+                        to: cycle_gate_info.to_account_info(),
+                    },
+                    &[seeds],
+                ),
+                lamports,
+                space as u64,
+                ctx.program_id,
+            )?;
+        }
+
+        // Write CycleGate data directly
+        let gate = CycleGate {
+            cycle_number,
+            block_number,
+            timestamp: now,
+            is_consumed: false,
+            bump: ctx.bumps.cycle_gate,
+        };
+        let mut data = ctx.accounts.cycle_gate.try_borrow_mut_data()?;
+        // try_serialize writes discriminator + fields, so start at offset 0
+        gate.try_serialize(&mut (&mut data[..] as &mut [u8]))?;
+
+        msg!("CycleGate updated: cycle #{}, block #{}", cycle_number, block_number);
+
+        emit!(CycleReady {
+            pool_id: ctx.accounts.pow_config.pool_id,
+            block_number: ctx.accounts.pow_config.blocks_mined,
+            timestamp: now,
+        });
+    }
 
     Ok(())
 }
@@ -335,35 +384,51 @@ fn calculate_current_fee(launch_ts: i64, now: i64) -> Result<u64> {
     Ok(fee)
 }
 
+/// Use the last 10 blocks to compute a true average block time for difficulty adjustment.
+/// Walks backwards through the circular buffer from the current index.
+const DIFFICULTY_AVG_WINDOW: usize = 10;
+
 fn adjust_difficulty_with_average(
     current_difficulty: u128,
-    block_timestamps: &[i64; 10],
+    block_timestamps: &[i64; 100],
     timestamps_count: u8,
-    current_ts: i64,
+    timestamps_index: u8,
+    _current_ts: i64,
 ) -> Result<u128> {
+    // Need at least 2 timestamps to compute an interval
     if timestamps_count < 2 {
         return Ok(current_difficulty);
     }
 
-    let count = timestamps_count as usize;
+    // How many timestamps we can actually use (min of stored count and our window)
+    let usable = (timestamps_count as usize).min(DIFFICULTY_AVG_WINDOW);
+    if usable < 2 {
+        return Ok(current_difficulty);
+    }
 
-    let oldest_ts = block_timestamps.iter()
-        .take(count)
-        .copied()
-        .filter(|&ts| ts > 0)
-        .min()
-        .unwrap_or(current_ts);
+    // Collect the last `usable` timestamps by walking backwards in the circular buffer.
+    // timestamps_index points to the NEXT write slot, so the most recent entry is at index-1.
+    let mut recent: [i64; DIFFICULTY_AVG_WINDOW] = [0i64; DIFFICULTY_AVG_WINDOW];
+    for i in 0..usable {
+        // Walk backwards: most recent is at (timestamps_index - 1), then -2, etc.
+        let buf_idx = (timestamps_index as usize + 100 - 1 - i) % 100;
+        recent[i] = block_timestamps[buf_idx];
+    }
 
-    let total_time = current_ts.saturating_sub(oldest_ts);
-    let intervals = count.saturating_sub(1) as i64;
-    if intervals <= 0 {
+    // recent[0] = newest, recent[usable-1] = oldest
+    let newest = recent[0];
+    let oldest = recent[usable - 1];
+    let total_time = newest.saturating_sub(oldest);
+    let intervals = (usable - 1) as i64;
+
+    if intervals <= 0 || total_time <= 0 {
         return Ok(current_difficulty);
     }
 
     let avg_block_time = total_time / intervals;
 
-    msg!("Difficulty adjustment: {} blocks, {}s total, {}s avg (target: {}s)",
-        count, total_time, avg_block_time, TARGET_BLOCK_TIME);
+    msg!("Difficulty adjustment: last {} blocks, {}s total, {}s avg (target: {}s)",
+        usable, total_time, avg_block_time, TARGET_BLOCK_TIME);
 
     let avg_u128 = avg_block_time.max(1) as u128;
     let target_u128 = TARGET_BLOCK_TIME as u128;
@@ -412,6 +477,17 @@ fn generate_new_challenge(old_challenge: &[u8; 32], nonce: u128, slot: u64, bloc
 }
 
 // =============================================================================
+// EVENTS
+// =============================================================================
+
+#[event]
+pub struct CycleReady {
+    pub pool_id: u8,
+    pub block_number: u64,
+    pub timestamp: i64,
+}
+
+// =============================================================================
 // CONTEXTE DE L'INSTRUCTION
 // =============================================================================
 
@@ -428,7 +504,7 @@ pub struct SubmitProof<'info> {
         bump = pow_config.bump,
         has_one = mint @ PowError::InvalidMint,
     )]
-    pub pow_config: Account<'info, PowConfig>,
+    pub pow_config: Box<Account<'info, PowConfig>>,
 
     /// L'autre pool (read-only, pour vérifier le supply cap combiné)
     #[account(
@@ -436,7 +512,7 @@ pub struct SubmitProof<'info> {
         bump = other_pool.bump,
         constraint = other_pool.pool_id != pow_config.pool_id @ PowError::InvalidPoolId,
     )]
-    pub other_pool: Account<'info, PowConfig>,
+    pub other_pool: Box<Account<'info, PowConfig>>,
 
     /// Shared mint authority (signe les mint_to CPI)
     #[account(
@@ -487,6 +563,15 @@ pub struct SubmitProof<'info> {
         bump,
     )]
     pub attestation: Option<Account<'info, DeviceAttestation>>,
+
+    /// CycleGate PDA (mis à jour tous les BLOCKS_PER_CYCLE blocs)
+    /// CHECK: Manually serialized to reduce stack usage
+    #[account(
+        mut,
+        seeds = [CYCLE_GATE_SEED],
+        bump,
+    )]
+    pub cycle_gate: AccountInfo<'info>,
 
     /// Programme Token
     pub token_program: Interface<'info, TokenInterface>,
