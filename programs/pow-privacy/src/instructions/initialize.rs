@@ -10,9 +10,6 @@ pub fn handler(ctx: Context<Initialize>) -> Result<()> {
     let config = &mut ctx.accounts.privacy_config;
     config.authority = ctx.accounts.authority.key();
     config.mint = ctx.accounts.mint.key();
-    config.next_claim_id = 0;
-    config.total_claims = 0;
-    config.total_claims_processed = 0;
     config.total_tokens_distributed = 0;
     config.total_blocks = 0;
     config.is_active = true;
@@ -21,15 +18,9 @@ pub fn handler(ctx: Context<Initialize>) -> Result<()> {
     config.authority_bump = ctx.bumps.privacy_authority;
     config.token_vault_bump = ctx.bumps.shared_token_vault;
     config.fee_vault_bump = ctx.bumps.shared_fee_vault;
-
-    // Initialize encrypted state placeholder
-    let encrypted_state = &mut ctx.accounts.encrypted_state;
-    encrypted_state.config = config.key();
-    encrypted_state.mxe_id = [0u8; 32]; // Will be set when Arcium is integrated
-    encrypted_state.balance_root = [0u8; 32];
-    encrypted_state.entry_count = 0;
-    encrypted_state.last_update = now;
-    encrypted_state.bump = ctx.bumps.encrypted_state;
+    config.team_wallet = Pubkey::default();
+    config.team_token_account = Pubkey::default();
+    config.withdrawal_fee_bps = DEFAULT_WITHDRAWAL_FEE_BPS;
 
     emit!(PrivacyProtocolInitialized {
         config: config.key(),
@@ -85,16 +76,6 @@ pub struct Initialize<'info> {
         bump,
     )]
     pub shared_fee_vault: UncheckedAccount<'info>,
-
-    /// Encrypted state (Arcium placeholder)
-    #[account(
-        init,
-        payer = authority,
-        space = EncryptedState::LEN,
-        seeds = [ENCRYPTED_STATE_SEED, privacy_config.key().as_ref()],
-        bump,
-    )]
-    pub encrypted_state: Account<'info, EncryptedState>,
 
     pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,

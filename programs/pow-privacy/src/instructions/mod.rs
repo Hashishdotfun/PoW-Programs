@@ -3,28 +3,32 @@
 pub mod initialize;
 pub mod initialize_vaults;
 pub mod submit_block_private;
-pub mod claim_reward;
 pub mod deposit_fee;
-pub mod admin;
-pub mod create_claim_buffer;
-pub mod create_claim_request_buffer;
+
+// SOL balance management
 pub mod create_deposit_buffer;
 pub mod deposit_private;
 pub mod create_withdraw_buffer;
 pub mod withdraw_private;
 
+// HASHISH token balance management
+pub mod create_deposit_token_buffer;
+pub mod deposit_token_private;
+pub mod create_withdraw_token_buffer;
+pub mod withdraw_token_private;
+pub mod execute_withdraw_token;
+
 // Re-export all public items - Anchor's #[program] macro needs these exports
-// The `handler` functions have the same name across modules but are always
-// called via their full path (e.g., instructions::initialize::handler)
 pub use initialize::*;
 pub use initialize_vaults::*;
 pub use submit_block_private::*;
-pub use claim_reward::*;
 pub use deposit_fee::*;
-pub use admin::*;
-pub use create_claim_buffer::*;
-pub use create_claim_request_buffer::*;
 pub use create_deposit_buffer::*;
 pub use deposit_private::*;
 pub use create_withdraw_buffer::*;
 pub use withdraw_private::*;
+pub use create_deposit_token_buffer::*;
+pub use deposit_token_private::*;
+pub use create_withdraw_token_buffer::*;
+pub use withdraw_token_private::*;
+pub use execute_withdraw_token::*;

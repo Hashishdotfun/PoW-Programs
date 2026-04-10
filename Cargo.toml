@@ -1,7 +1,12 @@
 [workspace]
 members = [
-    "programs/*",
-    "encrypted-ixs"
+    "programs/pow-protocol",
+    "programs/pow-treasury",
+]
+exclude = [
+    "programs/transfer-hook",
+    "programs/pow-privacy",
+    "encrypted-ixs",
 ]
 resolver = "2"
 

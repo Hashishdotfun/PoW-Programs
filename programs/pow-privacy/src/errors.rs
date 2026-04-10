@@ -13,18 +13,6 @@ pub enum ErrorCode {
     #[msg("Invalid proof of work")]
     InvalidProofOfWork,
 
-    #[msg("Invalid claim secret")]
-    InvalidClaimSecret,
-
-    #[msg("Claim already processed")]
-    ClaimAlreadyProcessed,
-
-    #[msg("Claim not found")]
-    ClaimNotFound,
-
-    #[msg("Claim expired")]
-    ClaimExpired,
-
     #[msg("Encrypted destination too long")]
     EncryptedDestinationTooLong,
 
@@ -43,9 +31,6 @@ pub enum ErrorCode {
     #[msg("Invalid program for CPI")]
     InvalidProgram,
 
-    #[msg("Max pending claims reached")]
-    MaxPendingClaimsReached,
-
     #[msg("Arcium verification failed")]
     ArciumVerificationFailed,
 
@@ -57,9 +42,6 @@ pub enum ErrorCode {
 
     #[msg("Arcium cluster not set")]
     ClusterNotSet,
-
-    #[msg("Claim buffer has already been used")]
-    ClaimBufferAlreadyUsed,
 
     #[msg("Protocol is paused")]
     ProtocolPaused,
@@ -76,9 +58,6 @@ pub enum ErrorCode {
     #[msg("Buffer overflow - too much data")]
     BufferOverflow,
 
-    #[msg("Unauthorized claimer")]
-    UnauthorizedClaimer,
-
     #[msg("Invalid destination account")]
     InvalidDestination,
 
@@ -93,4 +72,19 @@ pub enum ErrorCode {
 
     #[msg("Insufficient encrypted balance for mining fee")]
     InsufficientEncryptedBalance,
+
+    #[msg("Fee calculation overflow")]
+    FeeCalculationOverflow,
+
+    #[msg("Team wallet not configured")]
+    TeamWalletNotConfigured,
+
+    #[msg("Token buffer has already been used")]
+    TokenBufferAlreadyUsed,
+
+    #[msg("Withdrawal not approved by MPC")]
+    WithdrawNotApproved,
+
+    #[msg("Withdrawal has already been executed")]
+    WithdrawAlreadyExecuted,
 }

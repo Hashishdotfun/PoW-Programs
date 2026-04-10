@@ -10,11 +10,19 @@
     "init-comp-defs": "ts-node scripts/init-comp-defs.ts",
     "init-all": "ts-node scripts/init-protocol.ts && ts-node scripts/init-privacy.ts && ts-node scripts/init-comp-defs.ts",
     "set-attestation-authority": "ts-node scripts/set-attestation-authority.ts",
-    "create-pool": "ts-node scripts/create-orca-pool.ts"
+    "create-pool": "ts-node scripts/create-orca-pool.ts",
+    "deploy-mainnet": "ts-node scripts/deploy-mainnet.ts",
+    "deploy-mainnet:phase1": "DEPLOY_PHASE=1 ts-node scripts/deploy-mainnet.ts",
+    "deploy-mainnet:phase2": "DEPLOY_PHASE=2 ts-node scripts/deploy-mainnet.ts",
+    "deploy-mainnet:dry": "DRY_RUN=true ts-node scripts/deploy-mainnet.ts"
   },
   "dependencies": {
     "@arcium-hq/client": "^0.8.0",
+    "@ardrive/turbo-sdk": "^1.41.0",
     "@coral-xyz/anchor": "^0.30.1",
+    "@irys/sdk": "^0.2.11",
+    "@meteora-ag/cp-amm-sdk": "^1.3.8",
+    "@meteora-ag/dlmm": "^1.9.4",
     "@orca-so/whirlpools": "^6.0.0",
     "@solana/kit": "^5.5.1",
     "@solana/spl-token": "^0.4.6",

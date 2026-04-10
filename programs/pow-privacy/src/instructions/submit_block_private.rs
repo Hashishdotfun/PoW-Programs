@@ -56,34 +56,27 @@ fn build_mine_block_args(
 /// Submit a block via the privacy layer with Arcium MPC
 ///
 /// Flow:
-/// 1. Miner sends encrypted data to relayer off-chain
-/// 2. Relayer calls this instruction with all data as parameters
-/// 3. Verifies PoW is valid
-/// 4. Queues Arcium MPC computation (mine_block) to verify miner balance
-/// 5. CPI to pow-protocol::submit_proof (privacy_authority signs)
-/// 6. Creates Claim for miner to collect rewards later
+/// 1. Relayer calls this instruction with PoW data + encrypted state
+/// 2. Verifies PoW is valid
+/// 3. CPI to pow-protocol::submit_proof (privacy_authority signs) → mints tokens to sharedTokenVault
+/// 4. Queues Arcium MPC computation (mine_block) to deduct protocol fee from encrypted SOL balance
+/// 5. Emits BlockMinedPrivate event with reward amount
 ///
-/// Privacy properties:
-/// - The destination is encrypted with Arcium x25519 (MPC decryption only)
-/// - The miner's balance is verified in MPC without revealing it
-/// - The secret_hash links miner to claim without revealing identity
+/// Note: The HASHISH token reward is NOT automatically added to the encrypted token balance.
+/// The client must call deposit_token_private in a separate transaction to credit the reward.
 ///
 /// # Arguments
 /// * `computation_offset` - Arcium computation offset
 /// * `nonce` - The PoW nonce found by miner
 /// * `client_pubkey` - x25519 public key for Arcium decryption
 /// * `encryption_nonce` - Nonce used with RescueCipher
-/// * `secret_hash` - SHA256 hash of the claim secret
-/// * `encrypted_destination` - Encrypted destination pubkey (4 x 32 bytes)
-/// * `encrypted_current_state` - Encrypted miner state (3 x 32 bytes)
+/// * `encrypted_current_state` - Encrypted miner SOL state (3 x 32 bytes)
 pub fn handler(
     ctx: Context<SubmitBlockPrivate>,
     computation_offset: u64,
     nonce: u128,
     client_pubkey: [u8; 32],
     encryption_nonce: u128,
-    secret_hash: [u8; 32],
-    encrypted_destination: [[u8; 32]; 4],
     encrypted_current_state: [[u8; 32]; 3],
 ) -> Result<()> {
     let now = Clock::get()?.unix_timestamp;
@@ -92,12 +85,6 @@ pub fn handler(
 
     // Verify protocol is active
     require!(config.is_active, ErrorCode::ProtocolInactive);
-
-    // Verify max claims not reached
-    require!(
-        config.next_claim_id < MAX_PENDING_CLAIMS,
-        ErrorCode::MaxPendingClaimsReached
-    );
 
     // Verify the PoW is valid
     // The hash uses privacy_authority as the "miner" pubkey
@@ -177,7 +164,7 @@ pub fn handler(
     // Account order must match on-chain SubmitProof struct:
     // miner, pow_config, other_pool, mint_authority, mint,
     // miner_token_account, miner_stats, fee_collector, attestation,
-    // token_program, system_program
+    // cycle_gate, token_program, system_program
     // For Option<Account> in pow-protocol, pass the program's own ID to signal None
     let attestation_none = ctx.accounts.pow_program.key();
     let cpi_accounts = [
@@ -190,6 +177,7 @@ pub fn handler(
         AccountMeta::new(ctx.accounts.privacy_miner_stats.key(), false),
         AccountMeta::new(ctx.accounts.pow_fee_collector.key(), false),
         AccountMeta::new_readonly(attestation_none, false),
+        AccountMeta::new(ctx.accounts.cycle_gate.key(), false),
         AccountMeta::new_readonly(ctx.accounts.token_program.key(), false),
         AccountMeta::new_readonly(ctx.accounts.system_program.key(), false),
     ];
@@ -212,6 +200,7 @@ pub fn handler(
             ctx.accounts.privacy_miner_stats.to_account_info(),
             ctx.accounts.pow_fee_collector.to_account_info(),
             ctx.accounts.pow_program.to_account_info(),
+            ctx.accounts.cycle_gate.to_account_info(),
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.system_program.to_account_info(),
         ],
@@ -223,8 +212,6 @@ pub fn handler(
     let vault_balance_after = ctx.accounts.shared_token_vault.amount;
     let reward_amount = vault_balance_after.saturating_sub(vault_balance_before);
 
-    // Capture claim_id before mutable borrows
-    let claim_id = config.next_claim_id;
     let block_number = pow_config.blocks_mined;
 
     // Queue Arcium MPC computation for mine_block
@@ -242,9 +229,6 @@ pub fn handler(
     // Import the callback from lib.rs
     use crate::pow_privacy::MineBlockCallback;
 
-    // Get claim key before it's initialized (we know the PDA address)
-    let claim_key = ctx.accounts.claim.key();
-
     queue_computation(
         ctx.accounts,
         computation_offset,
@@ -257,45 +241,22 @@ pub fn handler(
                     pubkey: ctx.accounts.privacy_config.key(),
                     is_writable: true,
                 },
-                CallbackAccount {
-                    pubkey: claim_key,
-                    is_writable: true,
-                },
             ],
         )?],
         1,  // num_callback_txs
         0,  // cu_price_micro
     )?;
 
-    // Now initialize the claim account
-    let claim = &mut ctx.accounts.claim;
-    claim.id = claim_id;
-    claim.amount = reward_amount;
-    // Store encrypted destination as Vec<u8>
-    let mut dest_bytes = Vec::with_capacity(128);
-    for chunk in &encrypted_destination {
-        dest_bytes.extend_from_slice(chunk);
-    }
-    claim.encrypted_destination = dest_bytes;
-    claim.client_pubkey = client_pubkey;
-    claim.encryption_nonce = encryption_nonce;
-    claim.secret_hash = secret_hash;
-    claim.is_claimed = false;
-    claim.verification_pending = true; // MPC is pending
-    claim.block_number = block_number;
-    claim.created_at = now;
-    claim.claimed_at = 0;
-    claim.bump = ctx.bumps.claim;
-
     // Update config
     let config = &mut ctx.accounts.privacy_config;
-    config.next_claim_id += 1;
-    config.total_claims += 1;
     config.total_blocks += 1;
+    config.total_tokens_distributed = config
+        .total_tokens_distributed
+        .checked_add(reward_amount)
+        .unwrap_or(config.total_tokens_distributed);
 
-    emit!(BlockSubmittedPrivate {
-        claim_id,
-        amount: reward_amount,
+    emit!(BlockMinedPrivate {
+        reward_amount,
         block_number,
         timestamp: now,
     });
@@ -332,16 +293,6 @@ pub struct SubmitBlockPrivate<'info> {
         bump = privacy_config.authority_bump,
     )]
     pub privacy_authority: UncheckedAccount<'info>,
-
-    /// Claim account to store the encrypted claim (Boxed to reduce stack)
-    #[account(
-        init,
-        payer = relayer,
-        space = Claim::LEN,
-        seeds = [CLAIM_SEED, privacy_config.key().as_ref(), &privacy_config.next_claim_id.to_le_bytes()],
-        bump,
-    )]
-    pub claim: Box<Account<'info, Claim>>,
 
     /// Shared token vault (receives minted rewards) - Boxed to reduce stack
     #[account(
@@ -387,6 +338,11 @@ pub struct SubmitBlockPrivate<'info> {
     /// CHECK: PDA of pow-protocol, validated during CPI
     #[account(mut)]
     pub pow_fee_collector: UncheckedAccount<'info>,
+
+    /// CycleGate PDA from pow-protocol (updated every 10 blocks)
+    /// CHECK: PDA of pow-protocol, validated during CPI
+    #[account(mut)]
+    pub cycle_gate: UncheckedAccount<'info>,
 
     /// The pow-protocol program
     /// CHECK: Verified by constraint
