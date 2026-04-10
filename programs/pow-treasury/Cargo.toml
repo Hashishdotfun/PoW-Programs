@@ -1,0 +1,27 @@
+[package]
+name = "pow-treasury"
+version = "0.1.0"
+description = "Treasury program for PoW Protocol - Automated buyback/burn and LP management via Meteora DLMM"
+edition = "2021"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "pow_treasury"
+
+[features]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+default = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+custom-heap = []
+custom-panic = []
+anchor-debug = []
+
+[dependencies]
+anchor-lang = { version = "0.32.1", features = ["init-if-needed"] }
+anchor-spl = "0.32.1"
+solana-program = "2.0"
+pow-protocol = { path = "../pow-protocol", features = ["cpi"] }
