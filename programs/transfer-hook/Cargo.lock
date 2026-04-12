@@ -1079,6 +1079,7 @@ dependencies = [
  "anchor-lang",
  "anchor-spl",
  "solana-program",
+ "solana-security-txt",
 ]
 
 [[package]]

@@ -51,8 +51,8 @@ pub const BURN_PCT: u64 = 50;
 pub const LP_TOKEN_PCT: u64 = 50;
 
 /// Pourcentage du SOL frais wrappé pour LP (le reste stay pour le prochain buyback)
-/// 0% temporaire pour drainer le backlog wSOL (~49 cycles), monter à 50% à l'équilibre
-pub const LP_SOL_WRAP_PCT: u64 = 0;
+/// 2/3 du SOL va en LP, 1/3 reste pour le prochain buyback
+pub const LP_SOL_WRAP_PCT: u64 = 66;
 
 // =============================================================================
 // CRANKER INCENTIVE
