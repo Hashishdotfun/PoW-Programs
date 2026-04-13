@@ -29,6 +29,19 @@ pub fn handler(ctx: Context<SubmitProof>, nonce: u128) -> Result<()> {
         .ok_or(PowError::Overflow)?;
     require!(combined_supply < MAX_SUPPLY, PowError::MaxSupplyReached);
 
+    // Émission cumulée (monotone, insensible aux burns) sur les deux pools.
+    // = total_supply_mined + total_burned_from_buyback + total_burned_from_transfer_tax
+    let combined_emitted: u128 = {
+        let this = &ctx.accounts.pow_config;
+        let other = &ctx.accounts.other_pool;
+        (this.total_supply_mined as u128)
+            .saturating_add(this.total_burned_from_buyback as u128)
+            .saturating_add(this.total_burned_from_transfer_tax as u128)
+            .saturating_add(other.total_supply_mined as u128)
+            .saturating_add(other.total_burned_from_buyback as u128)
+            .saturating_add(other.total_burned_from_transfer_tax as u128)
+    };
+
     // ==========================================================================
     // VÉRIFIER L'ATTESTATION DEVICE (seeker pool uniquement)
     // ==========================================================================
@@ -73,7 +86,7 @@ pub fn handler(ctx: Context<SubmitProof>, nonce: u128) -> Result<()> {
     // CALCULER ET COLLECTER LA FEE SOL
     // ==========================================================================
 
-    let fee_sol = calculate_current_fee(config.launch_ts, now)?;
+    let fee_sol = calculate_current_fee(combined_emitted)?;
 
     anchor_lang::system_program::transfer(
         CpiContext::new(
@@ -361,27 +374,48 @@ fn calculate_reward(blocks_mined: u64, launch_ts: i64, now: i64) -> Result<u64> 
     Ok(final_reward.max(min_reward))
 }
 
-fn calculate_current_fee(launch_ts: i64, now: i64) -> Result<u64> {
-    let elapsed = now - launch_ts;
-    let two_years_in_seconds = 2 * SECONDS_PER_YEAR;
-    let periods = (elapsed / two_years_in_seconds) as u32;
+/// Fee géométrique basée sur l'émission cumulée des deux pools.
+///
+/// `combined_emitted` = somme sur les deux pools de
+/// (`total_supply_mined` + `total_burned_from_buyback` + `total_burned_from_transfer_tax`).
+/// Ce total est monotone (ne diminue jamais avec les burns).
+///
+/// Formule: fee = FEE_INITIAL_SOL × 1000^(combined_emitted / MAX_SUPPLY)
+///
+/// Implémentée via 4 paliers (10% / 1% / 0.1% / 0.01%) — max 36 itérations.
+fn calculate_current_fee(combined_emitted: u128) -> Result<u64> {
+    // Ratio en basis points (0..=10_000), capé à 10_000 (100%)
+    let ratio_bp = combined_emitted
+        .saturating_mul(10_000)
+        .checked_div(MAX_SUPPLY as u128)
+        .ok_or(PowError::DivisionByZero)?
+        .min(10_000);
 
-    let mut fee = FEE_INITIAL_SOL;
+    let tens       = ratio_bp / 1000;       // 0..=10
+    let ones       = (ratio_bp % 1000) / 100; // 0..=9
+    let tenths     = (ratio_bp % 100) / 10;   // 0..=9
+    let hundredths = ratio_bp % 10;            // 0..=9
 
-    for _ in 0..periods.min(10) {
-        fee = fee
-            .checked_mul(FEE_MULTIPLIER_NUMERATOR)
-            .ok_or(PowError::Overflow)?
-            .checked_div(FEE_MULTIPLIER_DENOMINATOR)
-            .ok_or(PowError::DivisionByZero)?;
+    let mut fee: u128 = FEE_INITIAL_SOL as u128;
 
-        if fee > FEE_SOL_CAP {
-            fee = FEE_SOL_CAP;
-            break;
+    // Applique un facteur `num / FEE_GEO_DEN` exactement `n` fois
+    let apply = |fee: &mut u128, n: u128, num: u128| -> Result<()> {
+        for _ in 0..n {
+            *fee = fee
+                .checked_mul(num)
+                .ok_or(PowError::Overflow)?
+                .checked_div(FEE_GEO_DEN)
+                .ok_or(PowError::DivisionByZero)?;
         }
-    }
+        Ok(())
+    };
 
-    Ok(fee)
+    apply(&mut fee, tens,       FEE_GEO_TEN_NUM)?;
+    apply(&mut fee, ones,       FEE_GEO_ONE_NUM)?;
+    apply(&mut fee, tenths,     FEE_GEO_TENTH_NUM)?;
+    apply(&mut fee, hundredths, FEE_GEO_HUND_NUM)?;
+
+    Ok((fee as u64).min(FEE_SOL_CAP))
 }
 
 /// Use the last 10 blocks to compute a true average block time for difficulty adjustment.

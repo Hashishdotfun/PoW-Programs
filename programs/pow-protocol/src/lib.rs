@@ -237,16 +237,23 @@ mod tests {
     }
 
     #[test]
-    fn test_fee_calculation() {
-        // Test fee initiale (0.001 SOL)
-        assert_eq!(FEE_INITIAL_SOL, 1_000_000); // 0.001 SOL
+    fn test_fee_constants() {
+        // Fee initiale: 0.001 SOL
+        assert_eq!(FEE_INITIAL_SOL, 1_000_000);
 
-        // Test fee après 2 ans (1.5x)
-        let fee_2y = FEE_INITIAL_SOL * FEE_MULTIPLIER_NUMERATOR / FEE_MULTIPLIER_DENOMINATOR;
-        assert_eq!(fee_2y, 1_500_000); // 0.0015 SOL
+        // Fee cap: 1 SOL
+        assert_eq!(FEE_SOL_CAP, 1_000_000_000);
 
-        // Test fee cap
-        assert_eq!(FEE_SOL_CAP, 500_000_000); // 0.5 SOL
+        // Sanity: 1000^(1/10) × 10 ≈ 1000 × FEE_GEO_DEN (via facteurs chunked)
+        // On vérifie le palier le plus gros: appliquer TEN 10 fois doit donner ~1000x
+        let mut fee: u128 = FEE_INITIAL_SOL as u128;
+        for _ in 0..10 {
+            fee = fee * FEE_GEO_TEN_NUM / FEE_GEO_DEN;
+        }
+        // Attendu: ~1_000_000_000 (1 SOL). Tolérance sur précision numérique.
+        let expected = FEE_SOL_CAP as u128;
+        let diff = if fee > expected { fee - expected } else { expected - fee };
+        assert!(diff < expected / 1000, "TEN^10 should be ~1000x, got {} vs {}", fee, expected);
     }
 
 }

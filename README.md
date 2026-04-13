@@ -204,10 +204,12 @@ Rewards (per pool, halved for dual-pool)
   R0_NORMAL          = 28,700,000 (0.0287 tokens — after first year)
   DECAY_FACTOR       = 0.999999943 per block (~2.95% yearly decay)
 
-Fees
-  FEE_INITIAL_SOL    = 1,000,000 (0.001 SOL)
-  FEE_MULTIPLIER     = 1.5x every 2 years
-  FEE_SOL_CAP        = 500,000,000 (0.5 SOL)
+Fees (geometric curve on cumulative emission)
+  FEE_INITIAL_SOL    = 1,000,000 (0.001 SOL)   — at 0% emitted
+  FEE_SOL_CAP        = 1,000,000,000 (1 SOL)   — at 100% emitted
+  Formula            = FEE_INITIAL × 1000^(emitted / MAX_SUPPLY)
+  Emission metric    = total_supply_mined + total_burned_from_buyback
+                       + total_burned_from_transfer_tax   (monotonic, both pools)
   TEAM_FEE_PCT       = 5%
   PROTO_FEE_PCT      = 95% (60% buyback, 40% LP)
 

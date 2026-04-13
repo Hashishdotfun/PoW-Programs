@@ -46,18 +46,40 @@ pub const DECAY_FACTOR_DENOMINATOR: u128 = 1_000_000_000;
 pub const BOOST_DURATION: i64 = SECONDS_PER_YEAR;
 
 // =============================================================================
-// FEE PARAMETERS (Fee SOL progressive)
+// FEE PARAMETERS (Fee géométrique basée sur l'émission cumulée)
 // =============================================================================
+//
+// Formule: fee = FEE_INITIAL_SOL × 1000^(emitted / MAX_SUPPLY)
+//   - 0% émis   →  0.001 SOL  (initiale)
+//   - 50% émis  →  ~0.032 SOL
+//   - 100% émis →  1.0 SOL    (cap atteint)
+//
+// `emitted` = total_supply_mined + total_burned_from_buyback + total_burned_from_transfer_tax
+// (sommé sur les deux pools). C'est l'émission cumulée monotone — insensible aux burns.
+//
+// Calcul on-chain sans float via 4 paliers (max 36 itérations totales).
+// Ratio exprimé en basis points (0..=10_000 pour 0..=100%).
 
-/// Fee initiale: 0.001 SOL (en lamports)
-pub const FEE_INITIAL_SOL: u64 = 1_000_000; // 0.001 SOL = 1,000,000 lamports
+/// Fee initiale: 0.001 SOL (en lamports) — utilisée à 0% d'émission
+pub const FEE_INITIAL_SOL: u64 = 1_000_000;
 
-/// Multiplicateur tous les 2 ans: 1.5x
-pub const FEE_MULTIPLIER_NUMERATOR: u64 = 150;
-pub const FEE_MULTIPLIER_DENOMINATOR: u64 = 100;
+/// Fee maximum: 1 SOL (en lamports) — atteinte à 100% d'émission
+pub const FEE_SOL_CAP: u64 = 1_000_000_000;
 
-/// Fee maximum: 0.5 SOL (en lamports)
-pub const FEE_SOL_CAP: u64 = 500_000_000; // 0.5 SOL = 500,000,000 lamports
+/// Dénominateur commun pour tous les facteurs FEE_GEO_* (précision 10^12)
+pub const FEE_GEO_DEN: u128 = 1_000_000_000_000;
+
+/// 1000^(1/10) — facteur par palier de 10% d'émission (max 9 itérations)
+pub const FEE_GEO_TEN_NUM: u128 = 1_995_262_314_969;
+
+/// 1000^(1/100) — facteur par palier de 1% d'émission (max 9 itérations)
+pub const FEE_GEO_ONE_NUM: u128 = 1_071_773_462_536;
+
+/// 1000^(1/1000) — facteur par palier de 0.1% d'émission (max 9 itérations)
+pub const FEE_GEO_TENTH_NUM: u128 = 1_006_931_668_873;
+
+/// 1000^(1/10000) — facteur par palier de 0.01% d'émission (max 9 itérations)
+pub const FEE_GEO_HUND_NUM: u128 = 1_000_691_134_091;
 
 // =============================================================================
 // FEE DISTRIBUTION (Split des fees SOL)
