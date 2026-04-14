@@ -187,6 +187,23 @@ pub mod pow_protocol {
         instructions::collect_transfer_fees::handler(ctx)
     }
 
+    // =========================================================================
+    // AUTHORITY REVOCATION (one-shot, irreversible)
+    // =========================================================================
+
+    /// Permanently disable the SPL Token-2022 TransferFeeConfig authority on
+    /// the HASHISH mint. Callable only by the protocol authority.
+    ///
+    /// Irreversible: the transfer fee rate and maximum are locked forever.
+    /// The withdraw-withheld authority is left intact so the transfer tax
+    /// harvest (`collect_transfer_fees`) keeps working. The mint authority
+    /// is also left intact so block rewards can still be minted.
+    pub fn disable_transfer_fee_config_authority(
+        ctx: Context<DisableTransferFeeConfigAuthority>,
+    ) -> Result<()> {
+        instructions::disable_fee_authority::handler(ctx)
+    }
+
 }
 
 // =============================================================================
