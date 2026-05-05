@@ -30,7 +30,7 @@ pub fn handler(
     config.damm_pool = damm_pool;
 
     // Cycle state
-    config.current_phase = PHASE_BUYBACK;
+    config.current_phase = 0; // deprecated field, no longer used
     config.cycle_start_block = 0;
     config.tokens_for_lp = 0;
     config.last_cycle_ts = 0;
@@ -49,12 +49,16 @@ pub fn handler(
     config.total_sol_to_lp = 0;
     config.total_cranker_rewards = 0;
 
+    // Cycle consumption tracking (buyback puis LP par cycle, ordre strict)
+    config.last_consumed_buyback_cycle = 0;
+    config.last_consumed_lp_cycle = 0;
+
     config.bump = ctx.bumps.treasury_config;
 
     msg!("Treasury initialized");
     msg!("  DAMM v2 pool: {}", damm_pool);
     msg!("  Max slippage: {} bps", max_slippage_bps);
-    msg!("  Cycle length: {} blocks", BLOCKS_PER_CYCLE);
+    msg!("  Cycle trigger: per mega/super-mega event (buyback + LP)");
 
     Ok(())
 }

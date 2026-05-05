@@ -10,7 +10,7 @@ use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 
 use crate::constants::*;
 use crate::errors::PowError;
-use crate::state::{CycleGate, DeviceAttestation, MintAuthority, PowConfig, MinerStats};
+use crate::state::{DeviceAttestation, MintAuthority, PowConfig, MinerStats};
 
 pub fn handler(ctx: Context<SubmitProof>, nonce: u128) -> Result<()> {
     let clock = Clock::get()?;
@@ -233,53 +233,8 @@ pub fn handler(ctx: Context<SubmitProof>, nonce: u128) -> Result<()> {
     msg!("New difficulty: {}", ctx.accounts.pow_config.difficulty);
     msg!("Total supply mined (this pool): {}", ctx.accounts.pow_config.total_supply_mined);
 
-    // Update CycleGate every BLOCKS_PER_CYCLE blocks to authorize treasury actions
-    if ctx.accounts.pow_config.blocks_mined % BLOCKS_PER_CYCLE == 0 {
-        let cycle_number = ctx.accounts.pow_config.blocks_mined / BLOCKS_PER_CYCLE;
-        let block_number = ctx.accounts.pow_config.blocks_mined;
-
-        // Initialize CycleGate if empty (first time)
-        let cycle_gate_info = &ctx.accounts.cycle_gate;
-        if cycle_gate_info.data_len() == 0 {
-            let space = CycleGate::LEN;
-            let lamports = Rent::get()?.minimum_balance(space);
-            let cg_bump = ctx.bumps.cycle_gate;
-            let seeds: &[&[u8]] = &[CYCLE_GATE_SEED, &[cg_bump]];
-            anchor_lang::system_program::create_account(
-                CpiContext::new_with_signer(
-                    ctx.accounts.system_program.to_account_info(),
-                    anchor_lang::system_program::CreateAccount {
-                        from: ctx.accounts.miner.to_account_info(),
-                        to: cycle_gate_info.to_account_info(),
-                    },
-                    &[seeds],
-                ),
-                lamports,
-                space as u64,
-                ctx.program_id,
-            )?;
-        }
-
-        // Write CycleGate data directly
-        let gate = CycleGate {
-            cycle_number,
-            block_number,
-            timestamp: now,
-            is_consumed: false,
-            bump: ctx.bumps.cycle_gate,
-        };
-        let mut data = ctx.accounts.cycle_gate.try_borrow_mut_data()?;
-        // try_serialize writes discriminator + fields, so start at offset 0
-        gate.try_serialize(&mut (&mut data[..] as &mut [u8]))?;
-
-        msg!("CycleGate updated: cycle #{}, block #{}", cycle_number, block_number);
-
-        emit!(CycleReady {
-            pool_id: ctx.accounts.pow_config.pool_id,
-            block_number: ctx.accounts.pow_config.blocks_mined,
-            timestamp: now,
-        });
-    }
+    // CycleGate is no longer triggered by normal blocks.
+    // Treasury cycles are exclusively driven by mega/super-mega events (see submit_proof_mega).
 
     Ok(())
 }
@@ -288,7 +243,7 @@ pub fn handler(ctx: Context<SubmitProof>, nonce: u128) -> Result<()> {
 // FONCTIONS UTILITAIRES
 // =============================================================================
 
-fn verify_proof(challenge: &[u8; 32], miner_pubkey: &[u8], nonce: u128, blocks_mined: u64, difficulty: u128) -> Result<bool> {
+pub(crate) fn verify_proof(challenge: &[u8; 32], miner_pubkey: &[u8], nonce: u128, blocks_mined: u64, difficulty: u128) -> Result<bool> {
     let mut message = Vec::with_capacity(88);
     message.extend_from_slice(challenge);
     message.extend_from_slice(miner_pubkey);
@@ -317,7 +272,7 @@ fn verify_proof(challenge: &[u8; 32], miner_pubkey: &[u8], nonce: u128, blocks_m
     Ok(hash_value < target)
 }
 
-fn calculate_reward(blocks_mined: u64, launch_ts: i64, now: i64) -> Result<u64> {
+pub(crate) fn calculate_reward(blocks_mined: u64, launch_ts: i64, now: i64) -> Result<u64> {
     let elapsed = now - launch_ts;
 
     let base_reward = if elapsed < BOOST_DURATION {
@@ -383,7 +338,7 @@ fn calculate_reward(blocks_mined: u64, launch_ts: i64, now: i64) -> Result<u64> 
 /// Formule: fee = FEE_INITIAL_SOL × 1000^(combined_emitted / MAX_SUPPLY)
 ///
 /// Implémentée via 4 paliers (10% / 1% / 0.1% / 0.01%) — max 36 itérations.
-fn calculate_current_fee(combined_emitted: u128) -> Result<u64> {
+pub(crate) fn calculate_current_fee(combined_emitted: u128) -> Result<u64> {
     // Ratio en basis points (0..=10_000), capé à 10_000 (100%)
     let ratio_bp = combined_emitted
         .saturating_mul(10_000)
@@ -500,7 +455,7 @@ fn adjust_difficulty_with_average(
     Ok(new_difficulty.clamp(MIN_DIFFICULTY, MAX_DIFFICULTY))
 }
 
-fn generate_new_challenge(old_challenge: &[u8; 32], nonce: u128, slot: u64, block_number: u64) -> [u8; 32] {
+pub(crate) fn generate_new_challenge(old_challenge: &[u8; 32], nonce: u128, slot: u64, block_number: u64) -> [u8; 32] {
     let mut data = Vec::with_capacity(64);
     data.extend_from_slice(old_challenge);
     data.extend_from_slice(&nonce.to_le_bytes());
@@ -508,17 +463,6 @@ fn generate_new_challenge(old_challenge: &[u8; 32], nonce: u128, slot: u64, bloc
     data.extend_from_slice(&block_number.to_le_bytes());
 
     hash(&data).to_bytes()
-}
-
-// =============================================================================
-// EVENTS
-// =============================================================================
-
-#[event]
-pub struct CycleReady {
-    pub pool_id: u8,
-    pub block_number: u64,
-    pub timestamp: i64,
 }
 
 // =============================================================================
@@ -598,8 +542,12 @@ pub struct SubmitProof<'info> {
     )]
     pub attestation: Option<Account<'info, DeviceAttestation>>,
 
-    /// CycleGate PDA (mis à jour tous les BLOCKS_PER_CYCLE blocs)
-    /// CHECK: Manually serialized to reduce stack usage
+    /// DEPRECATED — kept at this position for backwards compatibility with the
+    /// pre-mega APK / IDL. Old clients still pass the cycle_gate PDA at this
+    /// slot. The handler no longer reads or writes it; it is now updated
+    /// exclusively by `submit_proof_mega`. Remove this field once all old
+    /// clients have migrated to a build that omits the account.
+    /// CHECK: untouched by the program.
     #[account(
         mut,
         seeds = [CYCLE_GATE_SEED],

@@ -391,8 +391,9 @@ impl MintAuthority {
 // CYCLE GATE - Autorise le treasury à exécuter un cycle
 // =============================================================================
 
-/// PDA mis à jour par submit_proof tous les BLOCKS_PER_CYCLE blocs.
-/// Le treasury vérifie ce PDA pour savoir s'il peut exécuter.
+/// PDA mis à jour exclusivement par submit_proof_mega lors de la résolution
+/// d'un mega ou super-mega block. Le treasury vérifie ce PDA pour savoir
+/// s'il peut exécuter un cycle de buyback.
 /// Seeds: [b"cycle_gate"]
 #[account]
 pub struct CycleGate {
@@ -414,6 +415,52 @@ impl CycleGate {
         + 8   // timestamp
         + 1   // is_consumed
         + 1;  // bump
+}
+
+// =============================================================================
+// MEGA STATE - Diff figées pour mega/super-mega blocks (Seeker pool only)
+// =============================================================================
+
+/// Niveau d'un block soumis via submit_proof_mega.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug)]
+pub enum BlockLevel {
+    Mega = 1,
+    SuperMega = 2,
+}
+
+/// Diff figées pour les events mega/super-mega.
+/// Snapshot à `initialize_mega` (= seeker_difficulty × FACTOR), puis re-snapshot
+/// à chaque résolution. Ne suit pas l'ajustement dynamique de la diff seeker
+/// entre deux résolutions — garantit que la cible ne devient pas plus dure pendant la chasse.
+///
+/// Seeds: [b"mega_state"] — singleton, seeker pool uniquement.
+#[account]
+pub struct MegaState {
+    /// Difficulté figée pour le mega courant
+    pub mega_difficulty: u128,
+    /// Difficulté figée pour le super-mega courant
+    pub super_mega_difficulty: u128,
+    /// Nombre total de megas résolus depuis l'init
+    pub mega_count: u64,
+    /// Nombre total de super-megas résolus depuis l'init
+    pub super_mega_count: u64,
+    /// Timestamp du dernier mega résolu (0 si jamais)
+    pub last_mega_ts: i64,
+    /// Timestamp du dernier super-mega résolu (0 si jamais)
+    pub last_super_mega_ts: i64,
+    /// Bump du PDA
+    pub bump: u8,
+}
+
+impl MegaState {
+    pub const LEN: usize = 8 // discriminator
+        + 16 // mega_difficulty
+        + 16 // super_mega_difficulty
+        + 8  // mega_count
+        + 8  // super_mega_count
+        + 8  // last_mega_ts
+        + 8  // last_super_mega_ts
+        + 1; // bump
 }
 
 // =============================================================================

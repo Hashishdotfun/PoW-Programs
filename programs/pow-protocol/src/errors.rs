@@ -170,4 +170,20 @@ pub enum PowError {
 
     #[msg("Unauthorized: caller is not the treasury program")]
     UnauthorizedTreasury,
+
+    // =============================================================================
+    // ERREURS MEGA / SUPER MEGA
+    // =============================================================================
+
+    #[msg("Mega blocks are only available on the Seeker pool")]
+    MegaOnSeekerOnly,
+
+    #[msg("MegaState is already initialized")]
+    MegaAlreadyInitialized,
+
+    #[msg("MegaState is not initialized — call initialize_mega first")]
+    MegaNotInitialized,
+
+    #[msg("Hash does not meet the required mega/super-mega target")]
+    InvalidMegaProof,
 }

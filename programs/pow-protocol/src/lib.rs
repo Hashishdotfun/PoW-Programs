@@ -31,6 +31,7 @@ pub mod state;
 pub mod instructions;
 
 use instructions::*;
+use state::BlockLevel;
 
 declare_id!("PoWQ79wY7LXrKaU8vZBoFb4JgSytENSdpAQAPJaZiSh");
 
@@ -87,6 +88,33 @@ pub mod pow_protocol {
     /// - `fee_collector`: PDA qui collecte les fees
     pub fn submit_proof(ctx: Context<SubmitProof>, nonce: u128) -> Result<()> {
         instructions::submit_proof::handler(ctx, nonce)
+    }
+
+    // =========================================================================
+    // MEGA / SUPER MEGA BLOCK (Seeker pool only)
+    // =========================================================================
+
+    /// Initialise le PDA MegaState pour la pool seeker.
+    /// Doit être appelé une fois après initialize(POOL_SEEKER) par l'authority.
+    /// Snapshot la diff seeker actuelle × FACTOR pour mega et super-mega.
+    pub fn initialize_mega(ctx: Context<InitializeMega>) -> Result<()> {
+        instructions::initialize_mega::handler(ctx)
+    }
+
+    /// Soumet une preuve mega ou super-mega sur la pool seeker.
+    ///
+    /// Le miner indique son `level` (Mega ou SuperMega). Le programme :
+    ///   1. Vérifie le hash contre la diff figée stockée dans MegaState
+    ///   2. Mint le reward (× MEGA_REWARD_MULT ou × SUPER_MEGA_REWARD_MULT)
+    ///   3. Encaisse la fee (× MEGA_FEE_MULT ou × SUPER_MEGA_FEE_MULT)
+    ///   4. Force-trigger un cycle treasury (1 buyback bonus)
+    ///   5. Re-snapshot la diff résolue (= seeker_diff × FACTOR)
+    pub fn submit_proof_mega(
+        ctx: Context<SubmitProofMega>,
+        nonce: u128,
+        level: BlockLevel,
+    ) -> Result<()> {
+        instructions::submit_proof_mega::handler(ctx, nonce, level)
     }
 
     // =========================================================================

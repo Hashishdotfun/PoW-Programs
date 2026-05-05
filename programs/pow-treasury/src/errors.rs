@@ -26,6 +26,9 @@ pub enum TreasuryError {
     #[msg("Wrong cycle phase for this operation")]
     WrongPhase,
 
+    #[msg("Buyback (Phase A) must be executed before LP (Phase B) for this cycle")]
+    BuybackNotDone,
+
     #[msg("Treasury cycle is disabled")]
     CycleDisabled,
 

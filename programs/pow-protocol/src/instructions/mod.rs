@@ -3,7 +3,9 @@
 // =============================================================================
 
 pub mod initialize;
+pub mod initialize_mega;
 pub mod submit_proof;
+pub mod submit_proof_mega;
 pub mod create_attestation;
 pub mod close_attestation;
 pub mod update_config;
@@ -18,7 +20,9 @@ pub mod disable_fee_authority;
 // called via their full path (e.g., instructions::initialize::handler)
 #[allow(ambiguous_glob_reexports)]
 pub use initialize::*;
+pub use initialize_mega::*;
 pub use submit_proof::*;
+pub use submit_proof_mega::*;
 pub use create_attestation::*;
 pub use close_attestation::*;
 pub use update_config::*;

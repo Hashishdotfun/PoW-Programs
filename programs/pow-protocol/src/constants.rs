@@ -145,3 +145,40 @@ pub const TREASURY_PROGRAM_ID: anchor_lang::prelude::Pubkey = anchor_lang::prelu
     185, 145, 112, 53, 116, 14, 130, 17, 2, 87, 220, 150, 193, 192, 166, 184,
 ]);
 
+// =============================================================================
+// MEGA / SUPER MEGA BLOCK PARAMETERS (Seeker pool only)
+// =============================================================================
+//
+// Lucky Block jackpot mechanic on POOL_SEEKER:
+//   - Mega       : diff × 1 000  → reward × 1 000  → fee × 800   (-20% mint)
+//   - Super Mega : diff × 10 000 → reward × 10 000 → fee × 7 500 (-25% mint)
+//
+// Difficulty is snapshotted at initialize_mega and frozen until a mega is
+// resolved. After resolution, it is re-snapshotted from the current seeker
+// difficulty to follow network growth.
+//
+// Both events force-trigger a treasury cycle (1 buyback) and increment
+// blocks_mined by their FACTOR to keep reward-decay coherent. They do NOT
+// push to block_timestamps (would corrupt the difficulty moving average).
+
+/// Difficulty multiplier for a mega block
+pub const MEGA_FACTOR: u128 = 1_000;
+
+/// Difficulty multiplier for a super-mega block
+pub const SUPER_MEGA_FACTOR: u128 = 10_000;
+
+/// Reward multiplier for a mega block
+pub const MEGA_REWARD_MULT: u64 = 1_000;
+
+/// Reward multiplier for a super-mega block
+pub const SUPER_MEGA_REWARD_MULT: u64 = 10_000;
+
+/// Fee multiplier for a mega block (vs base seeker fee)
+pub const MEGA_FEE_MULT: u64 = 800;
+
+/// Fee multiplier for a super-mega block (vs base seeker fee)
+pub const SUPER_MEGA_FEE_MULT: u64 = 7_500;
+
+/// Seed for the MegaState PDA (singleton, seeker pool only)
+pub const MEGA_STATE_SEED: &[u8] = b"mega_state";
+

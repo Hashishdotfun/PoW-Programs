@@ -17,9 +17,13 @@ pub struct CycleGate {
 
 /// Configuration et état du cycle treasury
 ///
-/// Gère l'alternance buyback/LP tous les 10 blocs:
-/// - Phase A (Buyback): Swap SOL→Token via Meteora DAMM v2, burn 50%, garder 50%
-/// - Phase B (LP): Add liquidity avec tokens du cycle A + SOL frais
+/// Chaque mega/super-mega ouvre un cycle qui déclenche les DEUX phases en série:
+/// - Phase A (Buyback) : Swap SOL→Token via Meteora DAMM v2, burn 50%, garder 50%
+/// - Phase B (LP) : Add liquidity avec tokens du buyback + 66% du SOL résiduel
+///
+/// Les deux phases sont exécutées par le cranker en 2 tx séparées :
+/// - Buyback toujours en premier (require: gate.cycle > last_consumed_buyback_cycle)
+/// - LP ensuite (require: gate.cycle == last_consumed_buyback_cycle && gate.cycle > last_consumed_lp_cycle)
 #[account]
 pub struct TreasuryConfig {
     /// Authority admin (même que pow-protocol)
@@ -38,7 +42,8 @@ pub struct TreasuryConfig {
     // CYCLE STATE
     // =========================================================================
 
-    /// Phase courante: 0 = Buyback (A), 1 = LP (B)
+    /// DEPRECATED — kept for layout compatibility, no longer used.
+    /// Phases sont maintenant indépendantes (buyback puis LP par cycle).
     pub current_phase: u8,
 
     /// Block count au début du cycle courant (lu depuis pow_config)
@@ -88,8 +93,12 @@ pub struct TreasuryConfig {
     /// Total rewards payées aux crankers
     pub total_cranker_rewards: u64,
 
-    /// Dernier cycle_number consommé (du CycleGate de pow-protocol)
-    pub last_consumed_cycle: u64,
+    /// Dernier cycle_number consommé par execute_buyback (Phase A)
+    pub last_consumed_buyback_cycle: u64,
+
+    /// Dernier cycle_number consommé par execute_lp (Phase B).
+    /// Doit toujours rester ≤ last_consumed_buyback_cycle (LP suit le buyback).
+    pub last_consumed_lp_cycle: u64,
 
     /// Bump du PDA
     pub bump: u8,
@@ -121,9 +130,10 @@ impl TreasuryConfig {
         + 8   // total_tokens_to_lp
         + 8   // total_sol_to_lp
         + 8   // total_cranker_rewards
-        + 8   // last_consumed_cycle
+        + 8   // last_consumed_buyback_cycle
+        + 8   // last_consumed_lp_cycle
         + 1   // bump
         + 32  // lp_position
         + 32  // position_nft_mint
-        + 24; // padding for future fields
+        + 16; // padding for future fields
 }

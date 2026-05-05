@@ -83,15 +83,22 @@ pub fn handler<'info>(
 
     // Vérifications
     require!(config.is_enabled, TreasuryError::CycleDisabled);
-    require!(config.current_phase == PHASE_LP, TreasuryError::WrongPhase);
     require!(config.tokens_for_lp > 0, TreasuryError::InsufficientTokens);
 
-    // Vérifier le CycleGate — un nouveau cycle doit être autorisé par pow-protocol
+    // Vérifier le CycleGate
     let cycle_gate_data = CycleGate::try_deserialize(
         &mut &ctx.accounts.cycle_gate.data.borrow()[..]
     )?;
+
+    // Le LP doit suivre le buyback du MÊME cycle :
+    //   - le buyback de ce cycle doit avoir été consommé
+    //   - le LP de ce cycle ne doit pas encore avoir été consommé
     require!(
-        cycle_gate_data.cycle_number > config.last_consumed_cycle,
+        cycle_gate_data.cycle_number <= config.last_consumed_buyback_cycle,
+        TreasuryError::BuybackNotDone
+    );
+    require!(
+        cycle_gate_data.cycle_number > config.last_consumed_lp_cycle,
         TreasuryError::CycleNotReady
     );
 
@@ -347,9 +354,8 @@ pub fn handler<'info>(
     let tokens_remaining = actual_tokens.saturating_sub(tokens_used);
     config.tokens_for_lp = tokens_remaining;
 
-    // Consommer le cycle et avancer la phase
-    config.last_consumed_cycle = cycle_gate_data.cycle_number;
-    config.current_phase = PHASE_BUYBACK;
+    // Consommer la phase B pour ce cycle (buyback était déjà fait)
+    config.last_consumed_lp_cycle = cycle_gate_data.cycle_number;
     config.total_cycles = config.total_cycles
         .checked_add(1)
         .ok_or(TreasuryError::Overflow)?;

@@ -50,9 +50,13 @@ pub const BURN_PCT: u64 = 50;
 /// Pourcentage des tokens achetés gardés pour LP (50%)
 pub const LP_TOKEN_PCT: u64 = 50;
 
-/// Pourcentage du SOL frais wrappé pour LP (le reste stay pour le prochain buyback)
-/// 2/3 du SOL va en LP, 1/3 reste pour le prochain buyback
-pub const LP_SOL_WRAP_PCT: u64 = 66;
+/// Pourcentage du SOL alloué au buyback (Phase A) sur le total disponible.
+/// Chaque mega/super-mega : 66% va en buyback, 34% reste pour le LP de ce même cycle.
+pub const BUYBACK_SOL_PCT: u64 = 66;
+
+/// Pourcentage du SOL résiduel utilisé pour le LP (Phase B).
+/// 100% = consomme tout ce qu'il reste après le buyback (soit ~34% du SOL initial).
+pub const LP_SOL_WRAP_PCT: u64 = 100;
 
 // =============================================================================
 // CRANKER INCENTIVE

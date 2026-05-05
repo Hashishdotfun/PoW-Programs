@@ -70,18 +70,18 @@ pub fn handler<'info>(ctx: Context<'_, '_, '_, 'info, ExecuteBuybackCycle<'info>
 
     // Vérifications
     require!(config.is_enabled, TreasuryError::CycleDisabled);
-    require!(config.current_phase == PHASE_BUYBACK, TreasuryError::WrongPhase);
 
-    // Vérifier le CycleGate — un nouveau cycle doit être autorisé par pow-protocol
+    // Vérifier le CycleGate — un nouveau cycle (mega ou super-mega) doit être autorisé
+    // Le buyback consomme la Phase A. Le LP suivra dans une 2e tx (Phase B).
     let cycle_gate_data = CycleGate::try_deserialize(
         &mut &ctx.accounts.cycle_gate.data.borrow()[..]
     )?;
     require!(
-        cycle_gate_data.cycle_number > config.last_consumed_cycle,
+        cycle_gate_data.cycle_number > config.last_consumed_buyback_cycle,
         TreasuryError::CycleNotReady
     );
 
-    // SOL disponible
+    // SOL disponible (total accumulé depuis le dernier mega)
     let sol_vault = &ctx.accounts.treasury_sol_vault;
     let rent = Rent::get()?;
     let min_balance = rent.minimum_balance(0);
@@ -89,15 +89,23 @@ pub fn handler<'info>(ctx: Context<'_, '_, '_, 'info, ExecuteBuybackCycle<'info>
 
     require!(available_sol > 0, TreasuryError::InsufficientSol);
 
-    // Calculer la reward du cranker (0.1%, min 5000 lamports, max 10%)
-    let cranker_reward = (available_sol
+    // Buyback consomme BUYBACK_SOL_PCT% du SOL total disponible.
+    // Le reste (~34%) est laissé dans le vault pour la Phase B (LP) du même cycle.
+    let buyback_budget = available_sol
+        .checked_mul(BUYBACK_SOL_PCT)
+        .ok_or(TreasuryError::Overflow)?
+        / 100;
+    require!(buyback_budget > 0, TreasuryError::InsufficientSol);
+
+    // Cranker reward calculé sur le budget buyback (0.1%, min 5000 lamports, max 10%)
+    let cranker_reward = (buyback_budget
         .checked_mul(CRANKER_REWARD_BPS)
         .ok_or(TreasuryError::Overflow)?
         / 10_000)
         .max(CRANKER_MIN_REWARD)
-        .min(available_sol / 10);
+        .min(buyback_budget / 10);
 
-    let swap_amount = available_sol.saturating_sub(cranker_reward);
+    let swap_amount = buyback_budget.saturating_sub(cranker_reward);
     require!(swap_amount > 0, TreasuryError::InsufficientSol);
 
     let sol_vault_bump = ctx.bumps.treasury_sol_vault;
@@ -286,18 +294,17 @@ pub fn handler<'info>(ctx: Context<'_, '_, '_, 'info, ExecuteBuybackCycle<'info>
         .checked_add(cranker_reward)
         .ok_or(TreasuryError::Overflow)?;
 
-    // Consommer le cycle et avancer la phase
-    config.last_consumed_cycle = cycle_gate_data.cycle_number;
-    config.current_phase = PHASE_LP;
+    // Consommer la phase A pour ce cycle
+    config.last_consumed_buyback_cycle = cycle_gate_data.cycle_number;
     config.cycle_attempts = 0;
     config.last_cycle_ts = Clock::get()?.unix_timestamp;
 
-    msg!("Buyback cycle complete (cycle #{}):", cycle_gate_data.cycle_number);
+    msg!("Buyback (Phase A) complete (cycle #{}):", cycle_gate_data.cycle_number);
     msg!("  SOL swapped: {} lamports", swap_amount);
     msg!("  Tokens received: {}", tokens_received);
     msg!("  Tokens burned: {}", burn_amount);
     msg!("  Tokens for LP: {}", lp_amount);
-    msg!("  Phase → LP (B)");
+    msg!("  Next: cranker should now call execute_lp for the same cycle");
 
     Ok(())
 }
