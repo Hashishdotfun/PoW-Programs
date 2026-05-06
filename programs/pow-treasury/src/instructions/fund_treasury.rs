@@ -57,7 +57,7 @@ pub struct FundTreasury<'info> {
     /// Treasury config (pour le PDA signer)
     #[account(
         seeds = [TREASURY_CONFIG_SEED],
-        bump = treasury_config.bump,
+        bump,
     )]
     pub treasury_config: Account<'info, TreasuryConfig>,
 

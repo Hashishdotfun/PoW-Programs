@@ -156,5 +156,11 @@ pub mod pow_treasury {
         instructions::lock_lp_position::handler(ctx)
     }
 
-
+    /// One-shot migration: rewrites the on-chain TreasuryConfig from V1 to V2
+    /// layout (shifting lp_position / position_nft_mint by 8 bytes after the
+    /// inserted last_consumed_lp_cycle field, fixing the bump byte). Idempotent.
+    /// Authority-only.
+    pub fn migrate_treasury_v2(ctx: Context<MigrateTreasuryV2>) -> Result<()> {
+        instructions::migrate_treasury_v2::handler(ctx)
+    }
 }

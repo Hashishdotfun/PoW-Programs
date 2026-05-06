@@ -382,7 +382,7 @@ pub struct ExecuteLpCycle<'info> {
     #[account(
         mut,
         seeds = [TREASURY_CONFIG_SEED],
-        bump = treasury_config.bump,
+        bump,
     )]
     pub treasury_config: Account<'info, TreasuryConfig>,
 

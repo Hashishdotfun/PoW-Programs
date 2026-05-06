@@ -113,7 +113,7 @@ pub struct ClaimLpFees<'info> {
     /// Treasury config
     #[account(
         seeds = [TREASURY_CONFIG_SEED],
-        bump = treasury_config.bump,
+        bump,
         has_one = authority @ TreasuryError::Unauthorized,
     )]
     pub treasury_config: Account<'info, TreasuryConfig>,

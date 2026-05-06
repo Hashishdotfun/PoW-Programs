@@ -91,7 +91,7 @@ pub struct LockLpPosition<'info> {
     /// Treasury config
     #[account(
         seeds = [TREASURY_CONFIG_SEED],
-        bump = treasury_config.bump,
+        bump,
     )]
     pub treasury_config: Account<'info, TreasuryConfig>,
 

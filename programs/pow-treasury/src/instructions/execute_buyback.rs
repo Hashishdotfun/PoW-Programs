@@ -319,7 +319,7 @@ pub struct ExecuteBuybackCycle<'info> {
     #[account(
         mut,
         seeds = [TREASURY_CONFIG_SEED],
-        bump = treasury_config.bump,
+        bump,
     )]
     pub treasury_config: Box<Account<'info, TreasuryConfig>>,
 
