@@ -39,6 +39,11 @@ pub fn handler(ctx: Context<InitializeMega>) -> Result<()> {
     mega_state.last_mega_ts = 0;
     mega_state.last_super_mega_ts = 0;
     mega_state.bump = ctx.bumps.mega_state;
+    // V3: each level gets its own challenge, seeded from the pool's current
+    // challenge so the very first Mega/Super proof works without needing a
+    // separate priming step.
+    mega_state.mega_challenge = pow_config.current_challenge;
+    mega_state.super_mega_challenge = pow_config.current_challenge;
 
     msg!("MegaState initialized");
     msg!("  Seeker difficulty: {}", seeker_diff);

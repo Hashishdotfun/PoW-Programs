@@ -101,6 +101,13 @@ pub mod pow_protocol {
         instructions::initialize_mega::handler(ctx)
     }
 
+    /// V3: migrate an existing MegaState account from V2 layout (73 bytes)
+    /// to V3 layout (137 bytes) by reallocating + seeding the two new
+    /// per-level challenge fields. Idempotent.
+    pub fn migrate_mega_state_v3(ctx: Context<MigrateMegaStateV3>) -> Result<()> {
+        instructions::migrate_mega_state_v3::handler(ctx)
+    }
+
     /// Soumet une preuve mega ou super-mega sur la pool seeker.
     ///
     /// Le miner indique son `level` (Mega ou SuperMega). Le programme :

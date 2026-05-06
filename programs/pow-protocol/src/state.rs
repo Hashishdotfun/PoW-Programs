@@ -450,10 +450,17 @@ pub struct MegaState {
     pub last_super_mega_ts: i64,
     /// Bump du PDA
     pub bump: u8,
+    /// V3: challenge dédié pour les Mega — n'avance que quand un Mega est miné.
+    /// Permet aux mineurs Mega/Super de ne pas être interrompus par les blocks
+    /// normaux. `[0u8; 32]` = pas encore migré (fallback sur current_challenge).
+    pub mega_challenge: [u8; 32],
+    /// V3: challenge dédié pour les Super-Mega.
+    pub super_mega_challenge: [u8; 32],
 }
 
 impl MegaState {
-    pub const LEN: usize = 8 // discriminator
+    /// V2 size — kept so we can detect a not-yet-migrated account at runtime.
+    pub const LEN_V2: usize = 8 // discriminator
         + 16 // mega_difficulty
         + 16 // super_mega_difficulty
         + 8  // mega_count
@@ -461,6 +468,8 @@ impl MegaState {
         + 8  // last_mega_ts
         + 8  // last_super_mega_ts
         + 1; // bump
+    /// V3 size — adds two 32-byte challenges.
+    pub const LEN: usize = Self::LEN_V2 + 32 + 32;
 }
 
 // =============================================================================

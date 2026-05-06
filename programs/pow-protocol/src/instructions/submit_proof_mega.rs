@@ -84,13 +84,50 @@ pub fn handler(ctx: Context<SubmitProofMega>, nonce: u128, level: BlockLevel) ->
     // ==========================================================================
     // VÉRIFIER LA PREUVE CONTRE LA DIFF MEGA FIGÉE
     // ==========================================================================
+    // V3: chaque niveau a son propre challenge + son propre compteur, qui ne
+    // bougent que quand le niveau correspondant est miné. Du coup un Normal
+    // block trouvé par quelqu'un d'autre ne casse plus le work des mineurs
+    // Mega/Super.
+    //
+    // Fallback rétro-compat: si le mega_challenge n'a pas encore été initialisé
+    // (account créé avant V3 et pas encore migré), on retombe sur l'ancien
+    // comportement (challenge = current_challenge, counter = blocks_mined).
 
-    let config = &ctx.accounts.pow_config;
+    let zero_challenge = [0u8; 32];
+    let (level_challenge, level_counter) = match level {
+        BlockLevel::Mega => {
+            if ctx.accounts.mega_state.mega_challenge == zero_challenge {
+                (
+                    ctx.accounts.pow_config.current_challenge,
+                    ctx.accounts.pow_config.blocks_mined,
+                )
+            } else {
+                (
+                    ctx.accounts.mega_state.mega_challenge,
+                    ctx.accounts.mega_state.mega_count,
+                )
+            }
+        }
+        BlockLevel::SuperMega => {
+            if ctx.accounts.mega_state.super_mega_challenge == zero_challenge {
+                (
+                    ctx.accounts.pow_config.current_challenge,
+                    ctx.accounts.pow_config.blocks_mined,
+                )
+            } else {
+                (
+                    ctx.accounts.mega_state.super_mega_challenge,
+                    ctx.accounts.mega_state.super_mega_count,
+                )
+            }
+        }
+    };
+
     let is_valid = verify_mega_proof(
-        &config.current_challenge,
+        &level_challenge,
         ctx.accounts.miner.key().as_ref(),
         nonce,
-        config.blocks_mined,
+        level_counter,
         mega_state_difficulty,
     )?;
     require!(is_valid, PowError::InvalidMegaProof);
@@ -198,20 +235,19 @@ pub fn handler(ctx: Context<SubmitProofMega>, nonce: u128, level: BlockLevel) ->
         .checked_add(block_increment)
         .ok_or(PowError::Overflow)?;
     config.last_block_ts = now;
-
-    // Nouveau challenge (comme un block normal)
-    config.current_challenge = generate_new_challenge(
-        &config.current_challenge,
-        nonce,
-        clock.slot,
-        config.blocks_mined,
-    );
+    // V3: ne plus regen `config.current_challenge` ici — c'est ce qui rendait
+    // les Mega/Super dépendants des Normal blocks et vice-versa. Le challenge
+    // global ne bouge plus que dans `submit_proof.rs` (Normal). Chaque niveau
+    // mega/super gère son propre challenge ci-dessous.
 
     // ==========================================================================
-    // RE-SNAPSHOT LA DIFF MEGA RÉSOLUE (= seeker_diff actuelle × FACTOR)
+    // RE-SNAPSHOT LA DIFF MEGA RÉSOLUE (= seeker_diff actuelle × FACTOR) +
+    // V3: regen le challenge ET le counter du niveau qu'on vient de miner
     // ==========================================================================
 
     let seeker_diff = ctx.accounts.pow_config.difficulty;
+    let blocks_mined_snap = ctx.accounts.pow_config.blocks_mined;
+    let slot = clock.slot;
     let mega_state = &mut ctx.accounts.mega_state;
     match level {
         BlockLevel::Mega => {
@@ -222,6 +258,12 @@ pub fn handler(ctx: Context<SubmitProofMega>, nonce: u128, level: BlockLevel) ->
                 .checked_add(1)
                 .ok_or(PowError::Overflow)?;
             mega_state.last_mega_ts = now;
+            mega_state.mega_challenge = generate_new_challenge(
+                &mega_state.mega_challenge,
+                nonce,
+                slot,
+                blocks_mined_snap,
+            );
         }
         BlockLevel::SuperMega => {
             mega_state.super_mega_difficulty = seeker_diff
@@ -231,6 +273,12 @@ pub fn handler(ctx: Context<SubmitProofMega>, nonce: u128, level: BlockLevel) ->
                 .checked_add(1)
                 .ok_or(PowError::Overflow)?;
             mega_state.last_super_mega_ts = now;
+            mega_state.super_mega_challenge = generate_new_challenge(
+                &mega_state.super_mega_challenge,
+                nonce,
+                slot,
+                blocks_mined_snap,
+            );
         }
     }
 
