@@ -14,6 +14,7 @@
 // program upgrade qui ship V3.
 
 use anchor_lang::prelude::*;
+use anchor_lang::system_program::{self, Transfer};
 
 use crate::constants::*;
 use crate::errors::PowError;
@@ -24,17 +25,49 @@ pub fn handler(ctx: Context<MigrateMegaStateV3>) -> Result<()> {
     require!(pow_config.is_initialized, PowError::NotInitialized);
     require!(pow_config.pool_id == POOL_SEEKER, PowError::MegaOnSeekerOnly);
 
-    let mega_state = &mut ctx.accounts.mega_state;
+    let mega_state_ai = &ctx.accounts.mega_state;
+    let current_size = mega_state_ai.data_len();
 
-    // Idempotent: skip if already populated.
-    let zero_challenge = [0u8; 32];
-    if mega_state.mega_challenge != zero_challenge {
-        msg!("MegaState already migrated to V3 — no-op");
+    // V3 size already? → idempotent no-op.
+    if current_size >= MegaState::LEN {
+        msg!("MegaState already at V3 size ({} bytes) — no-op", current_size);
         return Ok(());
     }
+    require!(
+        current_size == MegaState::LEN_V2,
+        PowError::InvalidAccountSize
+    );
 
-    mega_state.mega_challenge = pow_config.current_challenge;
-    mega_state.super_mega_challenge = pow_config.current_challenge;
+    // Top up rent so the larger account is rent-exempt at the new size.
+    let target_size = MegaState::LEN;
+    let needed_lamports = Rent::get()?.minimum_balance(target_size);
+    let current_lamports = mega_state_ai.lamports();
+    if needed_lamports > current_lamports {
+        let delta = needed_lamports - current_lamports;
+        system_program::transfer(
+            CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.authority.to_account_info(),
+                    to: mega_state_ai.to_account_info(),
+                },
+            ),
+            delta,
+        )?;
+    }
+
+    // Grow the account in place. Anchor's `AccountInfo::realloc(_, false)` is
+    // safe here: we only ever write the new tail bytes, never touching the
+    // original 73 bytes of V2 state.
+    mega_state_ai.realloc(target_size, false)?;
+
+    // Append the two challenges at offsets [73..105] and [105..137]. Both
+    // seeded from `pow_config.current_challenge` so the very next Mega/Super
+    // proof has a valid challenge to mine against.
+    let seed = pow_config.current_challenge;
+    let mut data = mega_state_ai.try_borrow_mut_data()?;
+    data[MegaState::LEN_V2..MegaState::LEN_V2 + 32].copy_from_slice(&seed);
+    data[MegaState::LEN_V2 + 32..MegaState::LEN_V2 + 64].copy_from_slice(&seed);
 
     msg!("MegaState migrated to V3 — per-level challenges seeded from current_challenge");
     Ok(())
@@ -54,16 +87,17 @@ pub struct MigrateMegaStateV3<'info> {
     )]
     pub pow_config: Box<Account<'info, PowConfig>>,
 
-    /// Singleton MegaState — réalloué à `MegaState::LEN` (V3 size).
+    /// Singleton MegaState — toujours en layout V2 quand on entre ici. On
+    /// utilise `UncheckedAccount` parce qu'Anchor refuserait de désérialiser
+    /// un compte de 73 bytes comme `MegaState` (137 bytes V3). Le handler
+    /// fait le realloc + write des challenges manuellement.
+    /// CHECK: PDA dérivée par les seeds, taille vérifiée dans le handler.
     #[account(
         mut,
         seeds = [MEGA_STATE_SEED],
-        bump = mega_state.bump,
-        realloc = MegaState::LEN,
-        realloc::payer = authority,
-        realloc::zero = false,
+        bump,
     )]
-    pub mega_state: Box<Account<'info, MegaState>>,
+    pub mega_state: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
 }

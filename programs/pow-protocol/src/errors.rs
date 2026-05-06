@@ -100,6 +100,9 @@ pub enum PowError {
     #[msg("Invalid difficulty value")]
     InvalidDifficulty,
 
+    #[msg("Account size doesn't match expected migration source")]
+    InvalidAccountSize,
+
     #[msg("Invalid reward value")]
     InvalidReward,
 
